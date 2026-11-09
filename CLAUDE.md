@@ -27,6 +27,7 @@ uv run pre-commit run --all-files      # everything CI runs
 
 `galaxy.yml` `version` equals the release tag without `v`.
 Releases: pushing a tag `v<version>` runs `.github/workflows/release.yml`
-(tag == `galaxy.yml` version == the supervisor default image tag, then the
+(tag == `galaxy.yml` version == the supervisor default image tag == chart version, then the
 multi-arch image to ghcr.io and a GitHub Release with the tarball). Bump
-`galaxy.yml` and `roles/supervisor/defaults/main.yml` together.
+`galaxy.yml`, `roles/supervisor/defaults/main.yml` and `chart/Chart.yaml`
+(`version`, `appVersion`) together; the release workflow checks all four.

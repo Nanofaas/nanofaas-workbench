@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 import yaml
@@ -44,3 +45,34 @@ def test_release_workflow_permissions_digest_platforms_and_tarball():
     assert "$DIGEST" in publish["run"]
     assert "nanofaas-workbench-$VERSION.tar.gz" in publish["run"]
     assert any("ansible-galaxy collection build" in s.get("run", "") for s in steps)
+
+
+def test_chart_version_is_the_collection_version():
+    version = yaml.safe_load((ROOT / "galaxy.yml").read_text())["version"]
+    chart = yaml.safe_load((ROOT / "chart/Chart.yaml").read_text())
+    assert chart["version"] == version
+    assert chart["appVersion"] == version
+    jobs = yaml.safe_load((ROOT / ".github/workflows/release.yml").read_text())["jobs"]
+    verify = "\n".join(s.get("run", "") for s in jobs["verify"]["steps"])
+    assert "chart/Chart.yaml" in verify
+    assert "appVersion" in verify
+
+
+def test_every_action_is_pinned_by_commit_sha():
+    for name in ("ci.yml", "release.yml"):
+        jobs = yaml.safe_load((ROOT / ".github/workflows" / name).read_text())["jobs"]
+        for job in jobs.values():
+            for step in job["steps"]:
+                if "uses" in step:
+                    ref = step["uses"].split("@")[1]
+                    assert re.fullmatch(r"[0-9a-f]{40}", ref), (name, step["uses"])
+
+
+def test_ci_smoke_tests_the_consumer_install_path():
+    steps = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())["jobs"][
+        "checks"
+    ]["steps"]
+    run = "\n".join(s.get("run", "") for s in steps)
+    assert 'ansible-galaxy collection install "git+file://' in run
+    assert "ansible_collections/nanofaas/workbench/playbooks" in run
+    assert '"$pb/deploy.yml"' in run
