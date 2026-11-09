@@ -30,7 +30,7 @@ loadgen:
   user: ""    # "uid:gid"
 supervisor:
   enabled: false
-  port: 8080
+  port: 8099  # the supervisor CLI's default
   bind: 127.0.0.1
 node_exporter:
   enabled: false
@@ -38,5 +38,5 @@ node_exporter:
   node_name: ""
 cadvisor:
   enabled: false
-  port: 8080
+  port: 8089  # the Service port; cAdvisor listens on 8080 in the pod
   node_name: ""

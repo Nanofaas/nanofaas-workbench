@@ -8,11 +8,11 @@ Runs with `--docker_only=true --store_container_labels=true`, so Docker labels a
 
 | `config` key | Default | |
 | --- | --- | --- |
-| `port` | `8080` | read back at `http://<host>:<port>/metrics` |
+| `port` | `8089` | read back at `http://<host>:<port>/metrics` (cAdvisor listens on 8080 inside the container; 8089 keeps clear of the 8080 a control plane often holds) |
 | `bind` | `127.0.0.1` | address the published port binds to |
 | `housekeeping_interval` | `5s` | |
 
-The image is pinned by digest in `defaults/main.yml` (`cadvisor_image`). Pod form: not implemented yet.
+The image is pinned by digest in `defaults/main.yml` (`cadvisor_image`).
 
 Mounts, all read-only, and why: `/` at `/rootfs` (filesystem and disk stats), `/sys` and `/sys/fs/cgroup`
 (cgroup counters), `/var/lib/docker` (container layer sizes), the single file `/var/run/docker.sock`

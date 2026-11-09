@@ -32,6 +32,13 @@ A JSON file passed as `-e workbench_vars=<path>`: a list of
 `{name, component, form, cpuset, config}` plus an optional `collect_dir`. The
 format and its validation rules are in [docs/vars.md](docs/vars.md).
 
+## Defaults worth knowing
+
+- `swap_quiet`'s `minAvailableBytes` defaults to 8 GiB: callers set it for the host they watch.
+- Supervisor targets get a 30 s start-up grace (`graceSeconds`) before `toleratedSeconds` applies.
+- Default ports: cAdvisor `8089` (8080 inside its container), supervisor `8099`.
+- Prometheus always runs with its admin API (needed by `collect`); keep `bind` on loopback.
+
 ## By hand
 
 ```bash
@@ -65,3 +72,12 @@ Host-network containers share the Linux VM's network, not the Mac's, so
 `localhost` ports of `prometheus`, `log-collector`, `supervisor` and `loadgen`
 are not reachable from the controller, and `collect` of those needs Linux.
 Probe them from inside the VM (`docker run --rm --network host busybox wget -qO- <url>`).
+
+## Releasing
+
+Bump `galaxy.yml`, `roles/supervisor/defaults/main.yml` and `chart/Chart.yaml` (`version` and
+`appVersion`) together, then push the tag `v<version>`: `.github/workflows/release.yml` checks the
+four agree, pushes the multi-arch supervisor image to GHCR and creates the GitHub Release. On the
+first release, make the GHCR package `workbench-supervisor` public (package settings → visibility);
+GHCR creates it private, and its `org.opencontainers.image.source` label links it to this
+repository.

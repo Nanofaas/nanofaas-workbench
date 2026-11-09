@@ -12,6 +12,16 @@
       the vars file {{ workbench_vars }} must define "instances" as a list
     quiet: true
 
+- name: The collect dir is an absolute controller path
+  ansible.builtin.assert:
+    that:
+      - collect_dir is string
+      - collect_dir is match('/')
+    fail_msg: >-
+      collect_dir must be an absolute path on the controller (got {{ collect_dir | to_json }})
+    quiet: true
+  when: collect_dir is defined
+
 - name: Instance is well formed
   ansible.builtin.assert:
     that:

@@ -23,7 +23,7 @@
     wb_values:
       image: "{{ cadvisor_image }}"
       args: "{{ cadvisor_command }}"
-      port: "{{ instance.config.port | default(8080) }}"
+      port: "{{ instance.config.port | default(8089) }}"
       # One instance per node, as in the container form.
       node_name: "{{ instance.config.node_name }}"
 
@@ -33,10 +33,10 @@
     tasks_from: container_deploy
   vars:
     wb_image: "{{ cadvisor_image }}"
-    wb_port: "{{ instance.config.port | default(8080) }}"
+    wb_port: "{{ instance.config.port | default(8089) }}"
     wb_host: "{{ instance.config.bind | default('127.0.0.1') }}"
     wb_ports:
-      - "{{ instance.config.bind | default('127.0.0.1') }}:{{ instance.config.port | default(8080) }}:8080"
+      - "{{ instance.config.bind | default('127.0.0.1') }}:{{ instance.config.port | default(8089) }}:8080"
     wb_command: "{{ cadvisor_command }}"
     wb_volumes:
       - /:/rootfs:ro
