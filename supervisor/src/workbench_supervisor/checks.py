@@ -13,10 +13,14 @@ GIB = 1024**3
 LABEL_NAME = re.compile(r"[a-zA-Z_][a-zA-Z0-9_]*\Z")
 DURATION = re.compile(r"[0-9]+(ms|s|m|h|d|w|y)\Z")
 
-# kind -> {param: (type, default)}; a default of None means required.
+# kind -> {param: (type, default)}; a default of None means required, ... optional.
 PARAMS: dict[str, dict[str, tuple[type, Any]]] = {
     "scrape_up": {"job": (str, None), "labels": (dict, {})},
-    "container_running": {"name": (str, None), "node": (str, None)},
+    "container_running": {
+        "name": (str, None),
+        "node": (str, None),
+        "staleSeconds": (float, ...),  # absent: 3 * the check interval
+    },
     "swap_quiet": {
         "node": (str, None),
         "maxSwapPages": (int, 256),
@@ -46,8 +50,9 @@ def validate(spec: object) -> dict[str, Any]:
         "kind",
         "params",
         "toleratedSeconds",
+        "graceSeconds",
     }:
-        raise ValueError("a target is {kind, params, toleratedSeconds}")
+        raise ValueError("a target is {kind, params, toleratedSeconds, graceSeconds}")
     kind = spec.get("kind")
     if kind not in PARAMS:
         raise ValueError(f"kind must be one of {sorted(PARAMS)}")
@@ -56,6 +61,8 @@ def validate(spec: object) -> dict[str, Any]:
         raise ValueError(f"{kind} params are {sorted(PARAMS[kind])}")
     params: dict[str, Any] = {}
     for name, (typ, default) in PARAMS[kind].items():
+        if default is ... and name not in given:
+            continue
         value = given.get(name, default)
         ok = _number(value, typ) if typ in (int, float) else isinstance(value, typ)
         if value is None or not ok:
@@ -66,16 +73,21 @@ def validate(spec: object) -> dict[str, Any]:
         raise ValueError("labels map label names to strings")
     if "job" in labels:
         raise ValueError("scrape_up takes job as its own param, not in labels")
+    if params.get("staleSeconds", 1) <= 0:
+        raise ValueError("staleSeconds is positive")
     if kind == "swap_quiet" and not DURATION.match(params["window"]):
         raise ValueError("window is a Prometheus duration such as 30s")
     if kind == "http_ok" and not (
         _http(params["url"]) and params["timeoutSeconds"] > 0
     ):
         raise ValueError("http_ok needs an http(s) url and a positive timeout")
-    tolerated = spec.get("toleratedSeconds", 0)
-    if not _number(tolerated, float) or not math.isfinite(tolerated) or tolerated < 0:
-        raise ValueError("toleratedSeconds is a finite non-negative number")
-    return {"kind": kind, "params": params, "toleratedSeconds": tolerated}
+    out: dict[str, Any] = {"kind": kind, "params": params}
+    for key, default in (("toleratedSeconds", 0), ("graceSeconds", 30)):
+        value = spec.get(key, default)
+        if not _number(value, float) or not math.isfinite(value) or value < 0:
+            raise ValueError(f"{key} is a finite non-negative number")
+        out[key] = value
+    return out
 
 
 def _selector(metric: str, labels: dict[str, str]) -> str:
@@ -135,15 +147,16 @@ class Checker:
         return None
 
     def container_running(self, p: dict[str, Any]) -> str | None:
-        """Fail unless cAdvisor saw the container within 3 intervals."""
+        """Fail unless cAdvisor saw the container within staleSeconds."""
         name, node = p["name"], p["node"]
+        stale = p.get("staleSeconds", 3 * self.interval)
         promql = "time() - " + _selector(
             "container_last_seen", {"name": name, "node": node}
         )
         values = self.query(promql)
         if not values:
             return f"no container_last_seen series for {name} on {node}"
-        if min(values) > 3 * self.interval:
+        if min(values) > stale:
             return f"container {name} on {node}: last seen {min(values):.0f}s ago"
         return None
 

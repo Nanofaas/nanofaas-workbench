@@ -16,7 +16,12 @@ from workbench_supervisor.checks import Checker
 from workbench_supervisor.server import make_server
 from workbench_supervisor.state import State
 
-SPEC = {"kind": "scrape_up", "params": {"job": "node"}, "toleratedSeconds": 0}
+SPEC = {
+    "kind": "scrape_up",
+    "params": {"job": "node"},
+    "toleratedSeconds": 0,
+    "graceSeconds": 0,
+}
 
 
 @pytest.fixture
@@ -61,6 +66,16 @@ def test_put_status_delete(served):
     assert call(f"{base}/targets/ne", "DELETE")[0] == 204
     assert status(base)["targets"] == {}
     assert call(f"{base}/targets/ne", "DELETE")[0] == 204
+
+
+def test_query_strings_are_ignored(served):
+    _, base = served
+    assert put(base, "ne?x=1", SPEC) == 204
+    assert call(f"{base}/status?x=1")[0] == 200
+    assert "ne" in status(base)["targets"]
+    assert call(f"{base}/metrics?x=1")[0] == 200
+    assert call(f"{base}/targets/ne?x=1", "DELETE")[0] == 204
+    assert status(base)["targets"] == {}
 
 
 @pytest.mark.parametrize(

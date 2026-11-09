@@ -45,8 +45,9 @@ def test_supervisor_faults_when_exporter_stops(run_playbook, image, host_get, tm
     target = {
         "kind": "scrape_up",
         "params": {"job": "node", "labels": {"node": "n1"}},
-        # The supervisor starts once Prometheus reports up: no cold-start slack needed.
-        "toleratedSeconds": 10,
+        # Started together with Prometheus: the grace covers the first scrapes.
+        "graceSeconds": 20,
+        "toleratedSeconds": 5,
     }
     vs = {
         "instances": [
@@ -87,30 +88,14 @@ def test_supervisor_faults_when_exporter_stops(run_playbook, image, host_get, tm
             time.sleep(1)
         pytest.fail(f"never {state}: {report}")
 
-    up = (
-        f"http://127.0.0.1:{pr_port}/api/v1/query"
-        "?query=up%7Bjob%3D%22node%22%2Cnode%3D%22n1%22%7D"
-    )
     try:
-        # Exporter and Prometheus first: a slow first scrape must not fault
-        # the target (a fault is sticky) before the test looks at it.
-        first = {"instances": vs["instances"][:2]}
-        done = run_playbook("deploy", first)
-        assert done.returncode == 0, done.stdout + done.stderr
-        for _ in range(60):
-            values = json.loads(host_get(up) or "{}").get("data", {}).get("result", [])
-            if values and values[0]["value"][1] == "1":
-                break
-            time.sleep(1)
-        else:
-            pytest.fail(f"Prometheus never saw the exporter up: {host_get(up)}")
         done = run_playbook("deploy", vs)
         assert done.returncode == 0, done.stdout + done.stderr
         user = docker("inspect", "-f", "{{.Config.User}}", "wb-sv").stdout.strip()
         assert user not in ("", "0", "root")
-        wait_for("healthy", 20)
+        wait_for("healthy", 60)
         assert docker("stop", "wb-ne").returncode == 0
-        report = wait_for("fault", 30)
+        report = wait_for("fault", 60)
         assert [a["kind"] for a in report["anomalies"]] == ["scrape_up"]
         assert report["targets"]["ne"]["failing"] is True
         # It only signals: the stopped exporter stays stopped.

@@ -1,6 +1,11 @@
 from workbench_supervisor.state import State
 
-SPEC = {"kind": "http_ok", "params": {"url": "http://x/"}, "toleratedSeconds": 10}
+SPEC = {
+    "kind": "http_ok",
+    "params": {"url": "http://x/"},
+    "toleratedSeconds": 10,
+    "graceSeconds": 0,
+}
 
 
 class Clock:
@@ -141,4 +146,42 @@ def test_wall_clock_steps_do_not_change_tolerance():
     assert status["targets"]["t"]["since"] == "1970-01-01T00:16:40.000+00:00"
     wall.now -= 7200
     mono.now += 8
+    assert state.status()["state"] == "fault"
+
+
+GRACE = {**SPEC, "toleratedSeconds": 0, "graceSeconds": 30}
+
+
+def test_failing_inside_the_grace_only_degrades():
+    clock = Clock()
+    state = State(clock, clock)
+    state.put("t", GRACE)
+    for _ in range(10):  # failing for 10 s, e.g. before the first scrape
+        state.run_checks(failing())
+        assert state.status()["state"] == "degraded"
+        clock.now += 1
+    state.run_checks(passing)
+    clock.now += 60
+    state.run_checks(passing)
+    assert state.status()["state"] == "healthy"
+
+
+def test_failing_past_grace_and_tolerance_faults():
+    clock = Clock()
+    state = State(clock, clock)
+    state.put("t", {**GRACE, "toleratedSeconds": 5})
+    state.run_checks(failing())
+    clock.now += 34  # the tolerance counts from the end of the grace
+    state.run_checks(failing())
+    assert state.status()["state"] == "degraded"
+    clock.now += 1
+    assert state.status()["state"] == "fault"
+
+
+def test_grace_is_measured_from_the_put():
+    clock = Clock()
+    state = State(clock, clock)
+    state.put("t", GRACE)
+    clock.now += 31
+    state.run_checks(failing())
     assert state.status()["state"] == "fault"

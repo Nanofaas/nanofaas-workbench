@@ -66,6 +66,16 @@ def test_container_running_fails_when_stale(prom):
     assert "wb-x" in detail
 
 
+def test_container_running_stale_seconds_overrides_the_interval(prom):
+    prom.results[SEEN] = [15.5]
+    assert (
+        check(prom, "container_running", name="wb-x", node="n1", staleSeconds=20)
+        is None
+    )
+    prom.results[SEEN] = [20.5]
+    assert check(prom, "container_running", name="wb-x", node="n1", staleSeconds=20)
+
+
 def test_container_running_fails_without_series(prom):
     detail = check(prom, "container_running", name="wb-x", node="n1")
     assert detail == "no container_last_seen series for wb-x on n1"
@@ -178,6 +188,7 @@ def test_validate_fills_defaults():
         "params": {"node": "n1", "maxSwapPages": 256,
                    "minAvailableBytes": 8 * GIB, "window": "30s"},
         "toleratedSeconds": 0,
+        "graceSeconds": 30,
     }  # fmt: skip
     assert validate({"kind": "http_ok", "params": {"url": "https://x/"}})["params"] == {
         "url": "https://x/",
@@ -203,11 +214,18 @@ def test_validate_fills_defaults():
         {"kind": "scrape_up", "params": {"job": "j"}, "toleratedSeconds": True},
         {"kind": "scrape_up", "params": {"job": "j"}, "toleratedSeconds": float("nan")},
         {"kind": "scrape_up", "params": {"job": "j"}, "toleratedSeconds": float("inf")},
+        {"kind": "scrape_up", "params": {"job": "j"}, "graceSeconds": -1},
+        {"kind": "scrape_up", "params": {"job": "j"}, "graceSeconds": float("inf")},
+        {"kind": "scrape_up", "params": {"job": "j"}, "graceSeconds": "30"},
         {"kind": "scrape_up", "params": {"job": "j", "labels": {"job": "other"}}},
         {"kind": "scrape_up", "params": {"job": "j"}, "other": 1},
         {"kind": "swap_quiet", "params": {"node": "n", "window": "30s) or vector(1"}},
         {"kind": "swap_quiet", "params": {"node": "n", "maxSwapPages": "1"}},
         {"kind": "http_ok", "params": {"url": "file:///etc/passwd"}},
+        {
+            "kind": "container_running",
+            "params": {"name": "c", "node": "n", "staleSeconds": 0},
+        },
         {"kind": "http_ok", "params": {"url": "http://x/", "timeoutSeconds": 0}},
     ],
 )

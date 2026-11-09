@@ -1,5 +1,8 @@
 """Targets and their health.
 
+A target failing inside its grace (graceSeconds from its put) is only degraded;
+its tolerance counts from the later of the failure's start and the grace's end.
+
 Checks run outside the lock. Each put gives the target a new generation, and a
 check result is applied only to the generation it was started for, so a target
 removed (or replaced) while its check runs is never reported again.
@@ -26,6 +29,7 @@ def iso(t: float | None) -> str | None:
 class _Target:
     spec: dict[str, Any]
     gen: int
+    created: float  # put at, monotonic: the grace starts here
     since: float | None = None  # failing since, wall clock (reported)
     started: float = 0.0  # failing since, monotonic (measured)
     detail: str | None = None
@@ -55,7 +59,7 @@ class State:
             if old is not None and old.spec == spec:
                 return
             self._gen += 1
-            self._targets[name] = _Target(spec, self._gen)
+            self._targets[name] = _Target(spec, self._gen, self._monotonic())
 
     def remove(self, name: str) -> None:
         """Forget a target, if present."""
@@ -95,7 +99,11 @@ class State:
         """Turn a failure that outlasted its tolerance into a fault (lock held)."""
         if target.since is None or target.fault is not None:
             return
-        if self._monotonic() - target.started >= target.spec["toleratedSeconds"]:
+        grace_end = target.created + target.spec["graceSeconds"]
+        now = self._monotonic()
+        if now < grace_end:
+            return
+        if now - max(target.started, grace_end) >= target.spec["toleratedSeconds"]:
             target.fault = (target.since, target.detail)
 
     def status(self) -> dict[str, Any]:

@@ -2,6 +2,7 @@
 
 import json
 import re
+import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
@@ -48,14 +49,18 @@ def make_server(state: State, bind: str, port: int) -> ThreadingHTTPServer:
             self.end_headers()
             self.wfile.write(data)
 
+        def _path(self) -> str:
+            return urllib.parse.urlsplit(self.path).path  # without ?query
+
         def _name(self) -> str | None:
-            match = TARGET.match(self.path)
+            match = TARGET.match(self._path())
             return match.group(1) if match and NAME.match(match.group(1)) else None
 
         def do_GET(self) -> None:
-            if self.path == "/status":
+            path = self._path()
+            if path == "/status":
                 self._send(200, json.dumps(state.status()), "application/json")
-            elif self.path == "/metrics":
+            elif path == "/metrics":
                 self._send(200, metrics(state.status()), "text/plain; version=0.0.4")
             else:
                 self._send(404)
