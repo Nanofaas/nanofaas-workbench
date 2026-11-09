@@ -1,6 +1,6 @@
 ---
 # Inputs: instance, wb_image, wb_port (waited on, at wb_host, default 127.0.0.1; omit it for a job);
-# optional wb_command, wb_entrypoint, wb_restart_policy (default unless-stopped),
+# optional wb_command, wb_entrypoint, wb_user ("uid:gid"), wb_restart_policy (default unless-stopped),
 # wb_volumes, wb_ports (published), wb_network_mode (default: bridge),
 # wb_pid_mode, wb_restart (true restarts the container, e.g. after a mounted file changed),
 # wb_env (dict), wb_read_only, wb_cap_drop, wb_security_opts, wb_cpus, wb_memory,
@@ -13,6 +13,7 @@
     state: started
     restart: "{{ wb_restart | default(false) }}"
     restart_policy: "{{ wb_restart_policy | default('unless-stopped') }}"
+    user: "{{ wb_user | default(omit) }}"
     entrypoint: "{{ wb_entrypoint | default(omit) }}"
     network_mode: "{{ wb_network_mode | default(omit) }}"
     ports: "{{ wb_ports | default(omit) }}"

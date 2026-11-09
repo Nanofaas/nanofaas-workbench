@@ -1,5 +1,6 @@
 import hashlib
 import json
+import os
 import subprocess
 import time
 import uuid
@@ -78,6 +79,7 @@ def loadgen_vars(tmp_path, url, rows, duration="30s"):
                         },
                         "mounts": {str(sched): "/sched"},
                         "output_dir": str(out),
+                        "user": f"{os.getuid()}:{os.getgid()}",
                     },
                 }
             ]
@@ -115,6 +117,9 @@ def test_one_shot_script_writes_emitted_and_result_rows(run_playbook, tmp_path, 
         rows = [r for r in rows if isinstance(r, dict)]
         emitted = [r for r in rows if r.get("event") == "emitted"]
         results = [r for r in rows if r.get("event") == "result"]
+        # Owned by the caller (on Docker Desktop this passes either way: the
+        # bind mount maps ownership; on Linux it needs the container user).
+        assert (out / "generator.jsonl").stat().st_uid == os.getuid()
         assert len(emitted) == 2
         assert len(results) == 2
         assert {r["statusCode"] for r in results} == {200}

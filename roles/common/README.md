@@ -6,7 +6,7 @@ Not a component: shared task files the component roles include.
   as `wb-<instance name>` with the two `nanofaas.workbench/*` labels and
   `cpuset_cpus` from `instance.cpuset`, then waits for `wb_port` when it is set (omit it for a job).
   Inputs: `instance`, `wb_image`, optional `wb_port`, `wb_command`,
-  `wb_entrypoint`, `wb_restart_policy` (default `unless-stopped`; `"no"` for a job),
+  `wb_entrypoint`, `wb_user` (`uid:gid`), `wb_restart_policy` (default `unless-stopped`; `"no"` for a job),
   `wb_volumes`, `wb_ports`, `wb_network_mode` (default bridge), `wb_pid_mode`.
 - `container_undeploy.yml` removes `wb-<instance name>` if it carries the
   instance label; a missing instance is success. Stops with SIGTERM and a 10 s grace

@@ -25,12 +25,20 @@
     dest: "/tmp/wb-{{ instance.name }}/scripts/{{ instance.config.script }}"
     mode: "0644"
 
-# ponytail: 0777 because k6 runs as uid 12345; the caller still owns the path.
 - name: Create the output dir
   ansible.builtin.file:
     path: "{{ instance.config.output_dir }}"
     state: directory
-    mode: "0777"
+    mode: "0755"
+
+# k6 runs as the invoking user by default so its output files belong to the caller.
+- name: Look up the remote user's uid and gid
+  ansible.builtin.command:
+    argv: [id, "{{ item }}"]
+  loop: ["-u", "-g"]
+  register: loadgen_ids
+  changed_when: false
+  when: instance.config.user is not defined
 
 - name: Run k6 (container form)
   ansible.builtin.include_role:
@@ -41,10 +49,14 @@
     # Host network: schedules use loopback URLs.
     wb_network_mode: "{{ instance.config.network | default('host') }}"
     wb_restart_policy: "no"
+    wb_user: >-
+      {{ instance.config.user if instance.config.user is defined
+         else loadgen_ids.results[0].stdout ~ ':' ~ loadgen_ids.results[1].stdout }}
     wb_entrypoint: [sh, -c]
     wb_command:
       - "exec k6 run --quiet --log-format=json --log-output=file=/out/generator.jsonl /scripts/{{ instance.config.script }} 2>/out/generator.stderr"
-    wb_env: "{{ instance.config.env | default({}) }}"
+    # An arbitrary uid has no home in the image.
+    wb_env: "{{ {'HOME': '/tmp'} | combine(instance.config.env | default({})) }}"
     # Caller mounts are read-only; only the output dir is writable.
     wb_volumes: >-
       {{ ['/tmp/wb-' ~ instance.name ~ '/scripts:/scripts:ro', instance.config.output_dir ~ ':/out']

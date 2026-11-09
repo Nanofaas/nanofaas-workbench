@@ -7,7 +7,8 @@ k6 load generator, run as a **job** (container form only), image `grafana/k6` 2.
 | `script` | required | bundled script under `files/scripts/` (`one-shot.js`, moved verbatim from nanolab) |
 | `env` | `{}` | passed to k6 (`ONE_SHOT_SCHEDULE`, `ONE_SHOT_VUS`, `ONE_SHOT_DURATION`) |
 | `mounts` | `{}` | `{host_path: container_path}`, read-only |
-| `output_dir` | required | host path mounted read-write at `/out` (created 0777: k6 runs as uid 12345) |
+| `output_dir` | required | host path mounted read-write at `/out` |
+| `user` | invoking user's `uid:gid` | k6 runs as this user, so output files belong to the caller |
 | `network` | `host` | host network so loopback URLs in schedules work |
 
 Deploy runs `k6 run --quiet --log-format=json --log-output=file=/out/generator.jsonl /scripts/<script>`
