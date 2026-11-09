@@ -47,6 +47,8 @@ def test_node_exporter_serves_metrics(run_playbook, free_port):
             except OSError:
                 time.sleep(0.5)
         assert "node_cpu_seconds_total" in body
+        bound = docker("port", "wb-ne").stdout
+        assert "127.0.0.1" in bound, bound
         info = json.loads(docker("inspect", "wb-ne").stdout)[0]
         assert info["Config"]["Labels"][LABEL] == "ne"
         assert (

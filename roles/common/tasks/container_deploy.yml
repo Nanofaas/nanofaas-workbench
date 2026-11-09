@@ -1,5 +1,5 @@
 ---
-# Inputs: instance, wb_image, wb_port (waited on); optional wb_command,
+# Inputs: instance, wb_image, wb_port (waited on, at wb_host, default 127.0.0.1); optional wb_command,
 # wb_volumes, wb_ports (published), wb_network_mode (default: bridge),
 # wb_pid_mode.
 - name: Run the container
@@ -20,6 +20,6 @@
 
 - name: Wait for the port
   ansible.builtin.wait_for:
-    host: 127.0.0.1
+    host: "{{ wb_host | default('127.0.0.1') }}"
     port: "{{ wb_port }}"
     timeout: 60

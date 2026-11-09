@@ -1,22 +1,35 @@
 ---
-# The shared play behind deploy, collect and undeploy (not a public entry
-# point). wb_action and wb_hosts come from the importing playbook.
-- name: "Workbench {{ wb_action }}"
-  hosts: "{{ wb_hosts }}"
+# The shared plays behind deploy, collect and undeploy (not a public entry
+# point; wb_action comes from the importing playbook). This machine runs in
+# place with the interpreter that has the Docker SDK; every other host keeps
+# whatever its inventory sets. Hosts are split by inventory name with group_by:
+# host patterns also match by address (and `localhost:127.0.0.1` would pull in
+# Ansible's implicit localhost), and `a:&b` matches nothing when both are listed.
+- name: Split hosts into this machine and the rest
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Group by locality
+      ansible.builtin.group_by:
+        key: "wb_{{ 'local' if inventory_hostname in ['localhost', '127.0.0.1'] else 'remote' }}"
+
+- name: "Workbench on this machine, action {{ wb_action }}"
+  hosts: wb_local
+  gather_facts: false
+  vars:
+    ansible_connection: local
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+  vars_files:
+    - "{{ workbench_vars }}"
+  tasks:
+    - name: Run the instances
+      ansible.builtin.import_tasks: tasks/run_instances.yml
+
+- name: "Workbench on other hosts, action {{ wb_action }}"
+  hosts: wb_remote
   gather_facts: false
   vars_files:
     - "{{ workbench_vars }}"
   tasks:
-    - name: Validate the host vars file
-      ansible.builtin.import_tasks: tasks/validate_vars.yml
-
-    - name: "Run {{ wb_action }} for each instance"
-      ansible.builtin.include_role:
-        # Role names cannot hold a hyphen: component node-exporter is role node_exporter.
-        name: "nanofaas.workbench.{{ item.component | replace('-', '_') }}"
-        tasks_from: "{{ wb_action }}"
-      vars:
-        instance: "{{ item }}"
-      loop: "{{ (instances | reverse | list) if wb_action == 'undeploy' else instances }}"
-      loop_control:
-        label: "{{ item.name }}"
+    - name: Run the instances
+      ansible.builtin.import_tasks: tasks/run_instances.yml

@@ -6,8 +6,9 @@
   vars:
     wb_image: "{{ node_exporter_image }}"
     wb_port: "{{ instance.config.port | default(9100) }}"
+    wb_host: "{{ instance.config.bind | default('127.0.0.1') }}"
     wb_ports:
-      - "{{ instance.config.port | default(9100) }}:9100"
+      - "{{ instance.config.bind | default('127.0.0.1') }}:{{ instance.config.port | default(9100) }}:9100"
     wb_command:
       - --path.procfs=/host/proc
       - --path.sysfs=/host/sys

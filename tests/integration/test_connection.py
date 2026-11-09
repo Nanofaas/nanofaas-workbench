@@ -47,3 +47,22 @@ def test_undeploy_runs_instances_in_reverse_order(run_playbook):
         assert included == list(reversed(names))
     finally:
         subprocess.run(["docker", "rm", "-f", *[f"wb-{n}" for n in names]], check=False)
+
+
+NE = {"instances": [{"name": "ne", "component": "node-exporter"}]}
+
+
+def test_both_loopback_names_in_one_inventory_are_acted_on(run_playbook):
+    done = run_playbook("undeploy", NE, inventory="localhost,127.0.0.1,web1,")
+    # web1 is unreachable (ssh); the point is that both local names ran.
+    out = done.stdout
+    assert out.count("ok: [127.0.0.1] => (item=ne)") == 1
+    assert out.count("ok: [localhost] => (item=ne)") == 1
+
+
+def test_remote_only_inventory_never_touches_implicit_localhost(run_playbook):
+    done = run_playbook(
+        "undeploy", NE, inventory="web1,", ANSIBLE_SSH_EXECUTABLE="/usr/bin/false"
+    )
+    assert "for localhost" not in done.stdout
+    assert "[localhost]" not in done.stdout

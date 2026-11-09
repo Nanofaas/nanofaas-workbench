@@ -1,0 +1,14 @@
+---
+- name: Validate the host vars file
+  ansible.builtin.import_tasks: validate_vars.yml
+
+- name: "Run for each instance, action {{ wb_action }}"
+  ansible.builtin.include_role:
+    # Role names cannot hold a hyphen: component node-exporter is role node_exporter.
+    name: "nanofaas.workbench.{{ item.component | replace('-', '_') }}"
+    tasks_from: "{{ wb_action }}"
+  vars:
+    instance: "{{ item }}"
+  loop: "{{ (instances | reverse | list) if wb_action == 'undeploy' else instances }}"
+  loop_control:
+    label: "{{ item.name }}"
