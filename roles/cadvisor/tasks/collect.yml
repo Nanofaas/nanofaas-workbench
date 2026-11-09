@@ -1,0 +1,4 @@
+---
+# Nothing to collect: Prometheus scrapes cAdvisor.
+- name: Nothing to collect
+  ansible.builtin.meta: noop

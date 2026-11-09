@@ -1,0 +1,29 @@
+---
+- name: Run cAdvisor (container form)
+  ansible.builtin.include_role:
+    name: nanofaas.workbench.common
+    tasks_from: container_deploy
+  vars:
+    wb_image: "{{ cadvisor_image }}"
+    wb_port: "{{ instance.config.port | default(8080) }}"
+    wb_host: "{{ instance.config.bind | default('127.0.0.1') }}"
+    wb_ports:
+      - "{{ instance.config.bind | default('127.0.0.1') }}:{{ instance.config.port | default(8080) }}:8080"
+    wb_command:
+      - --docker_only=true
+      - --store_container_labels=true
+      - "--housekeeping_interval={{ instance.config.housekeeping_interval | default('5s') }}"
+    wb_volumes:
+      - /sys:/sys:ro
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Docker with the containerd image store: cAdvisor's docker factory needs containerd.
+      - /run/containerd:/run/containerd:ro
+  when: (instance.form | default('container')) == 'container'
+
+- name: Fail on the pod form until it is implemented
+  ansible.builtin.include_role:
+    name: nanofaas.workbench.common
+    tasks_from: pod_unsupported
+  when: (instance.form | default('container')) == 'pod'

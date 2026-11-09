@@ -1,0 +1,17 @@
+---
+# On the controller the data dir already is the caller's: nothing to fetch.
+- name: Fetch the data dir as a tarball
+  when:
+    - collect_dir is defined
+    - inventory_hostname not in ['localhost', '127.0.0.1']
+  block:
+    - name: Archive the data dir
+      ansible.builtin.command:
+        argv: [tar, czf, "/tmp/wb-{{ instance.name }}-data.tar.gz", -C, "{{ instance.config.data_dir }}", .]
+      changed_when: true
+
+    - name: Fetch the tarball
+      ansible.builtin.fetch:
+        src: "/tmp/wb-{{ instance.name }}-data.tar.gz"
+        dest: "{{ collect_dir }}/{{ instance.name }}/"
+        flat: true
