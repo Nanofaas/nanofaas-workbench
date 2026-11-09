@@ -1,0 +1,9 @@
+---
+# Inputs: instance. Uninstalling a missing release is success.
+- name: Uninstall the release
+  kubernetes.core.helm:
+    name: "wb-{{ instance.name }}"
+    release_namespace: "{{ instance.config.namespace | default('default') }}"
+    kubeconfig: "{{ instance.config.kubeconfig | default(omit) }}"
+    state: absent
+    wait: true

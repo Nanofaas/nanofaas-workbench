@@ -1,0 +1,33 @@
+{{- with .Values.supervisor }}{{ if .enabled }}
+{{- $ctx := dict "root" $ "component" "supervisor" }}
+{{ include "wb.service" (merge (dict "port" .port "target" .port) $ctx) }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "wb.name" $ }}
+  labels: {{- include "wb.labels" $ctx | nindent 4 }}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels:
+      nanofaas.workbench/instance: {{ $.Values.instance | quote }}
+  template:
+    metadata:
+      labels: {{- include "wb.labels" $ctx | nindent 8 }}
+    spec:
+      # Host network: Prometheus and the HTTP targets are on the node's loopback.
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+        - name: supervisor
+          image: {{ required "supervisor.image is required" .image | quote }}
+          args: {{- toYaml .args | nindent 12 }}
+          ports:
+            - containerPort: {{ .port }}
+          readinessProbe:
+            tcpSocket: {host: {{ .bind | quote }}, port: {{ .port }}}
+          {{- include "wb.hardened" . | nindent 10 }}
+          {{- include "wb.resources" .resources | nindent 10 }}
+{{- end }}{{ end }}

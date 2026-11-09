@@ -1,4 +1,24 @@
 ---
+- name: Work out the command line
+  ansible.builtin.set_fact:
+    node_exporter_command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+
+- name: Run node_exporter (pod form)
+  when: (instance.form | default('container')) == 'pod'
+  ansible.builtin.include_role:
+    name: nanofaas.workbench.common
+    tasks_from: pod_deploy
+  vars:
+    wb_key: node_exporter
+    wb_values:
+      image: "{{ node_exporter_image }}"
+      args: "{{ node_exporter_command }}"
+      port: "{{ instance.config.port | default(9100) }}"
+      # One instance per node, as in the container form.
+      node_name: "{{ instance.config.node_name }}"
+
 - name: Run node_exporter (container form)
   ansible.builtin.include_role:
     name: nanofaas.workbench.common
@@ -9,16 +29,8 @@
     wb_host: "{{ instance.config.bind | default('127.0.0.1') }}"
     wb_ports:
       - "{{ instance.config.bind | default('127.0.0.1') }}:{{ instance.config.port | default(9100) }}:9100"
-    wb_command:
-      - --path.procfs=/host/proc
-      - --path.sysfs=/host/sys
+    wb_command: "{{ node_exporter_command }}"
     wb_volumes:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
   when: (instance.form | default('container')) == 'container'
-
-- name: Fail on the pod form until it is implemented
-  ansible.builtin.include_role:
-    name: nanofaas.workbench.common
-    tasks_from: pod_unsupported
-  when: (instance.form | default('container')) == 'pod'

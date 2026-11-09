@@ -1,0 +1,51 @@
+{{- with .Values.loadgen }}{{ if .enabled }}
+{{- $ctx := dict "root" $ "component" "loadgen" }}
+{{ include "wb.configmap" (merge (dict "files" .files) $ctx) }}
+---
+# Read the exit status from the Job: kubectl get job wb-<instance> -o jsonpath='{.status.succeeded} {.status.failed}'
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "wb.name" $ }}
+  labels: {{- include "wb.labels" $ctx | nindent 4 }}
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels: {{- include "wb.labels" $ctx | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      # Host network: schedules use loopback URLs.
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      {{- with .user }}
+      securityContext:
+        runAsUser: {{ . | splitList ":" | first }}
+        runAsGroup: {{ . | splitList ":" | last }}
+      {{- end }}
+      containers:
+        - name: k6
+          image: {{ required "loadgen.image is required" .image | quote }}
+          command: [sh, -c]
+          args: {{- toYaml .args | nindent 12 }}
+          env:
+            {{- range $k, $v := .env }}
+            - {name: {{ $k | quote }}, value: {{ $v | toString | quote }}}
+            {{- end }}
+          volumeMounts:
+            {{- include "wb.filemounts" (dict "files" .files "dir" "/scripts") | nindent 12 }}
+            - {name: out, mountPath: /out}
+            {{- range $i, $h := (keys .mounts | sortAlpha) }}
+            - {name: mount-{{ $i }}, mountPath: {{ get $.Values.loadgen.mounts $h | quote }}, readOnly: true}
+            {{- end }}
+          {{- include "wb.resources" .resources | nindent 10 }}
+      volumes:
+        - name: config
+          configMap: {name: {{ include "wb.name" $ }}}
+        - name: out
+          hostPath: {path: {{ required "loadgen.output_dir is required" .output_dir | quote }}, type: DirectoryOrCreate}
+        {{- range $i, $h := (keys .mounts | sortAlpha) }}
+        - name: mount-{{ $i }}
+          hostPath: {path: {{ $h | quote }}}
+        {{- end }}
+{{- end }}{{ end }}

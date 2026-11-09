@@ -1,10 +1,4 @@
 ---
-- name: Fail on the pod form until it is implemented
-  ansible.builtin.include_role:
-    name: nanofaas.workbench.common
-    tasks_from: pod_unsupported
-  when: (instance.form | default('container')) == 'pod'
-
 - name: Check the required config
   ansible.builtin.assert:
     that:
@@ -12,6 +6,28 @@
       - instance.config.prometheus_url is defined
     fail_msg: "instance {{ instance.name }}: supervisor needs config.port and config.prometheus_url"
     quiet: true
+
+- name: Work out the command line
+  ansible.builtin.set_fact:
+    supervisor_command:
+      - "--port={{ instance.config.port }}"
+      - "--bind={{ instance.config.bind | default('127.0.0.1') }}"
+      - "--prometheus={{ instance.config.prometheus_url }}"
+      - "--interval={{ instance.config.interval | default(5) }}"
+      - "--targets={{ instance.config.targets | default({}) | to_json }}"
+
+- name: Run the supervisor (pod form)
+  when: (instance.form | default('container')) == 'pod'
+  ansible.builtin.include_role:
+    name: nanofaas.workbench.common
+    tasks_from: pod_deploy
+  vars:
+    wb_key: supervisor
+    wb_values:
+      image: "{{ instance.config.image | default(supervisor_image) }}"
+      args: "{{ supervisor_command }}"
+      port: "{{ instance.config.port }}"
+      bind: "{{ instance.config.bind | default('127.0.0.1') }}"
 
 - name: Run the supervisor (container form)
   ansible.builtin.include_role:
@@ -24,12 +40,7 @@
     # Host network: Prometheus and the HTTP targets are on the caller's loopback.
     wb_network_mode: host
     # A changed config changes the command, which recreates the container.
-    wb_command:
-      - "--port={{ instance.config.port }}"
-      - "--bind={{ instance.config.bind | default('127.0.0.1') }}"
-      - "--prometheus={{ instance.config.prometheus_url }}"
-      - "--interval={{ instance.config.interval | default(5) }}"
-      - "--targets={{ instance.config.targets | default({}) | to_json }}"
+    wb_command: "{{ supervisor_command }}"
     wb_read_only: true
     wb_cap_drop: [ALL]
     wb_security_opts: [no-new-privileges]

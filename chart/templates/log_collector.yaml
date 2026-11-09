@@ -1,0 +1,47 @@
+{{- with .Values.log_collector }}{{ if .enabled }}
+{{- $ctx := dict "root" $ "component" "log-collector" }}
+{{ include "wb.configmap" (merge (dict "files" .files) $ctx) }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "wb.name" $ }}
+  labels: {{- include "wb.labels" $ctx | nindent 4 }}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels:
+      nanofaas.workbench/instance: {{ $.Values.instance | quote }}
+  template:
+    metadata:
+      labels: {{- include "wb.labels" $ctx | nindent 8 }}
+      annotations:
+        checksum/config: {{ toYaml .files | sha256sum }}
+    spec:
+      # Host network: Loki is reached through a tunnel on the node's loopback.
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+        - name: log-collector
+          image: {{ required "log_collector.image is required" .image | quote }}
+          env:
+            {{- range $k, $v := .env }}
+            - {name: {{ $k | quote }}, value: {{ $v | toString | quote }}}
+            {{- end }}
+          readinessProbe:
+            tcpSocket: {host: 127.0.0.1, port: {{ .port }}}
+          {{- include "wb.hardened" . | nindent 10 }}
+          volumeMounts:
+            {{- include "wb.filemounts" (dict "files" .files "dir" "/fluent-bit/etc") | nindent 12 }}
+            - {name: containers, mountPath: /var/log/containers, readOnly: true}
+            - {name: storage, mountPath: /var/lib/fluent-bit}
+          {{- include "wb.resources" .resources | nindent 10 }}
+      volumes:
+        - name: config
+          configMap: {name: {{ include "wb.name" $ }}}
+        - name: containers
+          hostPath: {path: {{ printf "%s/containers" .docker_root | quote }}}
+        - name: storage
+          hostPath: {path: {{ .storage_dir | quote }}, type: DirectoryOrCreate}
+{{- end }}{{ end }}

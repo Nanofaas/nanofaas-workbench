@@ -1,0 +1,30 @@
+{{- with .Values.node_exporter }}{{ if .enabled }}
+{{- $ctx := dict "root" $ "component" "node-exporter" }}
+{{ include "wb.service" (merge (dict "port" .port "target" 9100) $ctx) }}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "wb.name" $ }}
+  labels: {{- include "wb.labels" $ctx | nindent 4 }}
+spec:
+  nodeName: {{ required "node_exporter.node_name is required" .node_name | quote }}
+  hostPID: true
+  containers:
+    - name: node-exporter
+      image: {{ required "node_exporter.image is required" .image | quote }}
+      args: {{- toYaml .args | nindent 8 }}
+      ports:
+        - containerPort: 9100
+      readinessProbe:
+        tcpSocket: {port: 9100}
+      volumeMounts:
+        - {name: proc, mountPath: /host/proc, readOnly: true}
+        - {name: sys, mountPath: /host/sys, readOnly: true}
+      {{- include "wb.resources" .resources | nindent 6 }}
+  volumes:
+    - name: proc
+      hostPath: {path: /proc}
+    - name: sys
+      hostPath: {path: /sys}
+{{- end }}{{ end }}

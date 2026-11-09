@@ -1,0 +1,50 @@
+---
+# Inputs: instance, wb_key (the chart's values key for the component, e.g. log_collector),
+# wb_values (the component's values: image, args, port, ...); optional wb_files (names of files in
+# wb_files_dir, default /tmp/wb-<instance>, on the target host: they go into the ConfigMap byte for
+# byte), wb_cpu and wb_memory (resources when the instance has no cpuset), wb_wait (default true).
+# instance.config.kubeconfig and instance.config.namespace (default "default") are optional.
+- name: Read the rendered config files
+  ansible.builtin.slurp:
+    src: "{{ wb_files_dir | default('/tmp/wb-' ~ instance.name) }}/{{ wb_file }}"
+  loop: "{{ wb_files | default([]) }}"
+  # Not `item`: the caller's `instance` is `{{ item }}` and would be re-read through it.
+  loop_control:
+    loop_var: wb_file
+  register: common_slurped
+
+# set_fact outlives the instance, so it is reset ('') when there is no cpuset.
+- name: Count the CPUs of the cpuset
+  ansible.builtin.set_fact:
+    common_cpus: >-
+      {%- set n = namespace(c=0) -%}
+      {%- for part in (instance.cpuset | default('')).split(',') if part -%}
+      {%- if '-' in part -%}
+      {%- set r = part.split('-') -%}
+      {%- set n.c = n.c + (r[1] | int) - (r[0] | int) + 1 -%}
+      {%- else -%}
+      {%- set n.c = n.c + 1 -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ n.c if n.c else '' }}
+
+- name: Install the release
+  kubernetes.core.helm:
+    name: "wb-{{ instance.name }}"
+    chart_ref: "{{ role_path }}/../../chart"
+    release_namespace: "{{ instance.config.namespace | default('default') }}"
+    kubeconfig: "{{ instance.config.kubeconfig | default(omit) }}"
+    wait: "{{ wb_wait | default(true) }}"
+    wait_timeout: 180s
+    values: >-
+      {{ {'instance': instance.name, wb_key: wb_component_values} }}
+  vars:
+    wb_component_values: >-
+        {{ {'enabled': true}
+           | combine(wb_values)
+           | combine({'files': dict((common_slurped.results | map(attribute='wb_file') | list)
+                                    | zip(common_slurped.results | map(attribute='content')
+                                          | map('b64decode') | list))})
+           | combine({'resources': ({'cpu': common_cpus | string} if common_cpus != ''
+                                    else ({'cpu': wb_cpu | string} if wb_cpu is defined else {}))
+                                   | combine({'memory': wb_memory} if wb_memory is defined else {})}) }}

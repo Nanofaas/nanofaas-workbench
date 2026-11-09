@@ -1,10 +1,4 @@
 ---
-- name: Fail on the pod form until it is implemented
-  ansible.builtin.include_role:
-    name: nanofaas.workbench.common
-    tasks_from: pod_unsupported
-  when: (instance.form | default('container')) == 'pod'
-
 - name: Check the required config
   ansible.builtin.assert:
     that:
@@ -13,21 +7,36 @@
     fail_msg: "instance {{ instance.name }}: loki needs config.port and config.data_dir"
     quiet: true
 
+- name: Create the config dir
+  ansible.builtin.file:
+    path: "/tmp/wb-{{ instance.name }}"
+    state: directory
+    mode: "0755"
+
+# Both forms use this file: a bind mount (container) or the ConfigMap's content (pod).
+- name: Place the config file
+  register: loki_config
+  ansible.builtin.copy:
+    src: "{{ instance.config.config_file | default('loki.yaml') }}"
+    dest: "/tmp/wb-{{ instance.name }}/loki.yaml"
+    mode: "0644"
+
+- name: Run Loki (pod form)
+  when: (instance.form | default('container')) == 'pod'
+  ansible.builtin.include_role:
+    name: nanofaas.workbench.common
+    tasks_from: pod_deploy
+  vars:
+    wb_key: loki
+    wb_files: [loki.yaml]
+    wb_values:
+      image: "{{ loki_image }}"
+      args: [-config.file=/etc/loki/loki.yaml]
+      port: "{{ instance.config.port }}"
+
 - name: Run Loki (container form)
   when: (instance.form | default('container')) == 'container'
   block:
-    - name: Create the config dir
-      ansible.builtin.file:
-        path: "/tmp/wb-{{ instance.name }}"
-        state: directory
-        mode: "0755"
-
-    - name: Place the config file
-      register: loki_config
-      ansible.builtin.copy:
-        src: "{{ instance.config.config_file | default('loki.yaml') }}"
-        dest: "/tmp/wb-{{ instance.name }}/loki.yaml"
-        mode: "0644"
 
     # ponytail: 0777 because Loki runs as uid 10001; the caller still owns the path.
     - name: Create the data dir

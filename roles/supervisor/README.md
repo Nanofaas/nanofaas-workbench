@@ -44,4 +44,4 @@ API:
 - `GET /metrics` → `workbench_supervisor_state{state="healthy|degraded|fault"} 0|1`,
   `workbench_supervisor_target_failing{target=…,kind=…} 0|1`.
 
-`collect`: nothing. Pod form: not implemented yet.
+`collect`: nothing. Pod form: a Deployment on the host network with a Service on `config.port`.

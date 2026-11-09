@@ -1,0 +1,43 @@
+# One release per instance (`wb-<instance>`). The collection's roles fill these values;
+# a component renders only when its `enabled` is true. Images, args and config files are
+# passed in by the role so the container and pod forms share one source for each.
+instance: ""
+
+# Per component: enabled, image, args, resources ({cpu, memory}, requests = limits),
+# plus the keys listed in templates/<component>.yaml.
+prometheus:
+  enabled: false
+  port: 9090
+  bind: 127.0.0.1
+  files: {}   # {prometheus.yml: <content>}
+loki:
+  enabled: false
+  port: 3100
+  files: {}   # {loki.yaml: <content>}
+log_collector:
+  enabled: false
+  port: 2020
+  files: {}   # {fluent-bit.conf, parsers.conf}
+  env: {}
+  docker_root: /var/lib/docker
+  storage_dir: /var/lib/fluent-bit
+loadgen:
+  enabled: false
+  files: {}   # {<script>: <content>}
+  script: ""
+  env: {}
+  output_dir: ""
+  mounts: {}  # {host_path: container_path}, read-only
+  user: ""    # "uid:gid"
+supervisor:
+  enabled: false
+  port: 8080
+  bind: 127.0.0.1
+node_exporter:
+  enabled: false
+  port: 9100
+  node_name: ""
+cadvisor:
+  enabled: false
+  port: 8080
+  node_name: ""

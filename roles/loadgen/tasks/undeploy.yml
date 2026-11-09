@@ -1,5 +1,12 @@
 ---
+- name: Uninstall the release
+  when: (instance.form | default('container')) == 'pod'
+  ansible.builtin.include_role:
+    name: nanofaas.workbench.common
+    tasks_from: pod_undeploy
+
 - name: Stop with a grace period and remove the container
+  when: (instance.form | default('container')) == 'container'
   ansible.builtin.include_role:
     name: nanofaas.workbench.common
     tasks_from: container_undeploy

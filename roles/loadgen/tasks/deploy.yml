@@ -1,10 +1,4 @@
 ---
-- name: Fail on the pod form (loadgen is a container job)
-  ansible.builtin.include_role:
-    name: nanofaas.workbench.common
-    tasks_from: pod_unsupported
-  when: (instance.form | default('container')) == 'pod'
-
 - name: Check the required config
   ansible.builtin.assert:
     that:
@@ -40,43 +34,99 @@
   changed_when: false
   when: instance.config.user is not defined
 
-- name: Run k6 (container form)
-  ansible.builtin.include_role:
-    name: nanofaas.workbench.common
-    tasks_from: container_deploy
-  vars:
-    wb_image: "{{ loadgen_image }}"
-    # Host network: schedules use loopback URLs.
-    wb_network_mode: "{{ instance.config.network | default('host') }}"
-    wb_restart_policy: "no"
-    wb_user: >-
+- name: Work out the command line
+  ansible.builtin.set_fact:
+    loadgen_command: >-
+      exec k6 run --quiet --log-format=json --log-output=file=/out/generator.jsonl
+      /scripts/{{ instance.config.script }} 2>/out/generator.stderr
+    loadgen_user: >-
       {{ instance.config.user if instance.config.user is defined
          else loadgen_ids.results[0].stdout ~ ':' ~ loadgen_ids.results[1].stdout }}
-    wb_entrypoint: [sh, -c]
-    wb_command:
-      - "exec k6 run --quiet --log-format=json --log-output=file=/out/generator.jsonl /scripts/{{ instance.config.script }} 2>/out/generator.stderr"
     # An arbitrary uid has no home in the image.
-    wb_env: "{{ {'HOME': '/tmp'} | combine(instance.config.env | default({})) }}"
-    # Caller mounts are read-only; only the output dir is writable.
-    wb_volumes: >-
-      {{ ['/tmp/wb-' ~ instance.name ~ '/scripts:/scripts:ro', instance.config.output_dir ~ ':/out']
-         + (instance.config.mounts | default({}) | dict2items
-            | map(attribute='key') | zip(instance.config.mounts | default({}) | dict2items | map(attribute='value'))
-            | map('join', ':') | map('regex_replace', '$', ':ro') | list) }}
+    loadgen_env: "{{ {'HOME': '/tmp'} | combine(instance.config.env | default({})) }}"
 
-# A job has no port: it counts as started when it runs or has already exited 0.
-- name: Wait for the job to have started
-  community.docker.docker_container_info:
-    name: "wb-{{ instance.name }}"
-  register: loadgen_state
-  until: >-
-    loadgen_state.container.State.Running or
-    loadgen_state.container.State.Status == 'exited'
-  retries: 30
-  delay: 1
+- name: Run k6 (pod form)
+  when: (instance.form | default('container')) == 'pod'
+  block:
+    # A Job's spec cannot be upgraded: a repeat run starts from a fresh release.
+    - name: Remove the previous release
+      ansible.builtin.include_role:
+        name: nanofaas.workbench.common
+        tasks_from: pod_undeploy
 
-- name: Fail fast when k6 exited non-zero
-  ansible.builtin.assert:
-    that: loadgen_state.container.State.ExitCode == 0
-    fail_msg: "instance {{ instance.name }}: k6 exited {{ loadgen_state.container.State.ExitCode }}; see generator.stderr in output_dir"
-    quiet: true
+    - name: Install the Job
+      ansible.builtin.include_role:
+        name: nanofaas.workbench.common
+        tasks_from: pod_deploy
+      vars:
+        wb_key: loadgen
+        wb_files_dir: "/tmp/wb-{{ instance.name }}/scripts"
+        wb_files: ["{{ instance.config.script }}"]
+        # A Job is not "ready": its status is polled below.
+        wb_wait: false
+        wb_values:
+          image: "{{ loadgen_image }}"
+          args: ["{{ loadgen_command }}"]
+          env: "{{ loadgen_env }}"
+          script: "{{ instance.config.script }}"
+          output_dir: "{{ instance.config.output_dir }}"
+          mounts: "{{ instance.config.mounts | default({}) }}"
+          user: "{{ loadgen_user }}"
+
+    - name: Wait for the job to have started
+      ansible.builtin.command:
+        argv: >-
+          {{ ['kubectl'] + (['--kubeconfig', instance.config.kubeconfig] if instance.config.kubeconfig is defined else [])
+             + ['-n', instance.config.namespace | default('default'), 'get', 'job', 'wb-' ~ instance.name,
+                '-o', 'jsonpath={.status.active}/{.status.succeeded}/{.status.failed}'] }}
+      register: loadgen_job
+      until: loadgen_job.stdout != '//'
+      retries: 60
+      delay: 2
+      changed_when: false
+
+    - name: Fail fast when k6 failed
+      ansible.builtin.assert:
+        that: loadgen_job.stdout.split('/')[2] == ''
+        fail_msg: "instance {{ instance.name }}: the k6 Job failed; see generator.stderr in output_dir"
+        quiet: true
+
+- name: Run k6 (container form)
+  when: (instance.form | default('container')) == 'container'
+  block:
+    - name: Start k6
+      ansible.builtin.include_role:
+        name: nanofaas.workbench.common
+        tasks_from: container_deploy
+      vars:
+        wb_image: "{{ loadgen_image }}"
+        # Host network: schedules use loopback URLs.
+        wb_network_mode: "{{ instance.config.network | default('host') }}"
+        wb_restart_policy: "no"
+        wb_user: "{{ loadgen_user }}"
+        wb_entrypoint: [sh, -c]
+        wb_command: ["{{ loadgen_command }}"]
+        wb_env: "{{ loadgen_env }}"
+        # Caller mounts are read-only; only the output dir is writable.
+        wb_volumes: >-
+          {{ ['/tmp/wb-' ~ instance.name ~ '/scripts:/scripts:ro', instance.config.output_dir ~ ':/out']
+             + (instance.config.mounts | default({}) | dict2items
+                | map(attribute='key') | zip(instance.config.mounts | default({}) | dict2items | map(attribute='value'))
+                | map('join', ':') | map('regex_replace', '$', ':ro') | list) }}
+
+    # A job has no port: it counts as started when it runs or has already exited 0.
+    - name: Wait for the job to have started
+      community.docker.docker_container_info:
+        name: "wb-{{ instance.name }}"
+      register: loadgen_state
+      until: >-
+        loadgen_state.container.State.Running or
+        loadgen_state.container.State.Status == 'exited'
+      retries: 30
+      delay: 1
+
+    - name: Fail fast when k6 exited non-zero
+      ansible.builtin.assert:
+        that: loadgen_state.container.State.ExitCode == 0
+        fail_msg: "instance {{ instance.name }}: k6 exited {{ loadgen_state.container.State.ExitCode }}; see generator.stderr in output_dir"
+        quiet: true

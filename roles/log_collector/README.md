@@ -17,4 +17,4 @@ A changed config file restarts the container.
 
 `collect`: GET `/api/v2/metrics/prometheus` to `<collect_dir>/<instance>/metrics.txt`; on a
 non-local host also the storage dir as `storage.tar.gz` (locally it is the caller's already).
-Image pinned by digest (`log_collector_image`, 5.1.3). Pod form: not implemented yet.
+Image pinned by digest (`log_collector_image`, 5.1.3). Pod form: a Deployment on the host network; `storage_dir` is a `hostPath` and `docker_root/containers` is mounted read-only at `/var/log/containers`, as in the container form (on containerd nodes those are symlinks into `/var/log/pods`, which is not mounted).

@@ -1,4 +1,0 @@
----
-- name: The pod form is not implemented yet
-  ansible.builtin.fail:
-    msg: "instance {{ instance.name }}: the pod form is not implemented yet"

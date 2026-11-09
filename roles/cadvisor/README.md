@@ -18,3 +18,5 @@ Mounts, all read-only, and why: `/` at `/rootfs` (filesystem and disk stats), `/
 (cgroup counters), `/var/lib/docker` (container layer sizes), the single file `/var/run/docker.sock`
 (container names and labels; the whole `/var/run` is not needed), and `/run/containerd` (Docker's
 containerd image store; without it the docker factory is not registered). `/proc` is not needed.
+
+Pod form: one Pod pinned with `nodeName` from required `config.node_name`, `hostPID: true`, the same read-only host mounts as `hostPath`, and a Service on `config.port`.

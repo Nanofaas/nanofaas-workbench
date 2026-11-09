@@ -1,0 +1,44 @@
+{{- with .Values.prometheus }}{{ if .enabled }}
+{{- $ctx := dict "root" $ "component" "prometheus" }}
+{{ include "wb.configmap" (merge (dict "files" .files) $ctx) }}
+---
+{{ include "wb.service" (merge (dict "port" .port "target" .port) $ctx) }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "wb.name" $ }}
+  labels: {{- include "wb.labels" $ctx | nindent 4 }}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels:
+      nanofaas.workbench/instance: {{ $.Values.instance | quote }}
+  template:
+    metadata:
+      labels: {{- include "wb.labels" $ctx | nindent 8 }}
+      annotations:
+        checksum/config: {{ toYaml .files | sha256sum }}
+    spec:
+      # Host network: the scrape targets include the node's loopback, as in the container form.
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+        - name: prometheus
+          image: {{ required "prometheus.image is required" .image | quote }}
+          args: {{- toYaml .args | nindent 12 }}
+          ports:
+            - containerPort: {{ .port }}
+          readinessProbe:
+            tcpSocket: {host: {{ .bind | quote }}, port: {{ .port }}}
+          volumeMounts:
+            {{- include "wb.filemounts" (dict "files" .files "dir" "/etc/prometheus") | nindent 12 }}
+            - {name: data, mountPath: /prometheus}
+          {{- include "wb.resources" .resources | nindent 10 }}
+      volumes:
+        - name: config
+          configMap: {name: {{ include "wb.name" $ }}}
+        - name: data
+          emptyDir: {}
+{{- end }}{{ end }}
