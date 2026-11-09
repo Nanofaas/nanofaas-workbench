@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -euo pipefail {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --locked --all-groups
+      - run: uv run --locked ruff check .
+      - run: uv run --locked ruff format --check .
+      - run: uv run --locked basedpyright
+      - run: uv run --locked bandit -c pyproject.toml -r supervisor
+        if: hashFiles('supervisor/**/*.py') != ''
+      - run: uv run --locked ansible-lint
+      - name: Install collection dependencies
+        run: |
+          uv run --locked python - <<'PY' > /tmp/requirements.yml
+          import yaml
+          deps = yaml.safe_load(open("galaxy.yml"))["dependencies"]
+          print(yaml.safe_dump({"collections": [{"name": n, "version": v} for n, v in deps.items()]}))
+          PY
+          uv run --locked ansible-galaxy collection install -r /tmp/requirements.yml
+      - run: uv run --locked pytest -q

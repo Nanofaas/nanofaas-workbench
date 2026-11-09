@@ -1,0 +1,23 @@
+---
+# Shared by deploy, collect and undeploy: the collection's own check of the
+# host vars file (docs/vars.md). Callers may validate more.
+- name: Instance is well formed
+  ansible.builtin.assert:
+    that:
+      - item.name is defined
+      - item.name is string
+      - item.name is match('^[a-z0-9-]+$')
+      - (instances | map(attribute='name') | select('equalto', item.name) | list | length) == 1
+      - item.component is defined
+      - item.component in workbench_components
+      - (item.form | default('container')) in ['container', 'pod']
+      - item.cpuset | default(none) is none or item.cpuset is match(workbench_cpuset_re)
+    fail_msg: >-
+      invalid instance {{ item.name | default('<no name>') }}: name must match
+      ^[a-z0-9-]+$ and be unique; component one of {{ workbench_components }};
+      form container|pod; cpuset a kernel CPU list such as 2-3,6 (got
+      {{ item | to_json }})
+    quiet: true
+  loop: "{{ instances }}"
+  loop_control:
+    label: "{{ item.name | default('<no name>') }}"

@@ -1,0 +1,11 @@
+---
+exclude_paths:
+  - .superpowers/
+  - .venv/
+  - .ansible/
+  - .github/
+  - .pre-commit-config.yaml
+  - uv.lock
+skip_list:
+  # ansible-lint's list of supported versions lags ansible-core 2.20.
+  - meta-runtime[unsupported-version]

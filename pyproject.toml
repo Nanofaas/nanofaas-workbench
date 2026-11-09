@@ -1,0 +1,74 @@
+[project]
+name = "nanofaas-workbench"
+version = "0.1.0"
+description = "Dev tooling for the nanofaas.workbench Ansible collection and its supervisor"
+requires-python = ">=3.12"
+dependencies = []
+
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = [
+    "ansible-core>=2.20,<2.21",
+    "ansible-lint>=25",
+    "basedpyright>=1.39.3",
+    "bandit>=1.8",
+    "docker>=7",
+    "pre-commit>=4.0",
+    "pytest>=9.0.3",
+    "pytest-cov>=6.0",
+    "pyyaml>=6.0.2",
+    # Keep equal to the ruff-pre-commit rev in .pre-commit-config.yaml.
+    "ruff==0.16.6",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "supervisor/tests"]
+markers = [
+    "docker: needs a working Docker daemon",
+    "kind: needs kind",
+]
+addopts = "--import-mode=importlib"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+extend-exclude = ["build", "dist", ".ansible"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F", "I", "N", "UP", "B", "C4", "SIM", "SLF", "TID", "RUF",
+    "PERF", "PT", "RET", "PTH", "ERA", "D",
+]
+ignore = ["D203", "D213", "PT018"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["supervisor"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**/*.py" = [
+    "F841", "SLF001",
+    "D100", "D101", "D102", "D103", "D104", "D105", "D107",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["supervisor"]
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 0  # raised when the supervisor lands
+
+[tool.basedpyright]
+include = ["tests", "supervisor"]
+typeCheckingMode = "standard"
+reportMissingTypeStubs = false
+reportPrivateUsage = false
+reportImplicitOverride = false
+venvPath = "."
+venv = ".venv"
+
+[tool.bandit]
+exclude_dirs = [".ansible", "tests", ".venv", "supervisor/tests"]
+skips = ["B404", "B603", "B607"]

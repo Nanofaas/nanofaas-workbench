@@ -1,0 +1,29 @@
+namespace: nanofaas
+name: workbench
+version: 0.1.0
+readme: README.md
+authors:
+  - Michele Ciavotta
+description: Experiment-platform components (Prometheus, Loki, fluent-bit, k6, node_exporter, cAdvisor, supervisor) as roles.
+license:
+  - MIT
+repository: https://github.com/Nanofaas/nanofaas-workbench
+tags: [monitoring]
+dependencies:
+  community.docker: 4.8.3
+  kubernetes.core: 6.2.0
+build_ignore:
+  - tests
+  - supervisor
+  - .superpowers
+  - .venv
+  - .ansible
+  - .git
+  - .github
+  - .ruff_cache
+  - .pytest_cache
+  - .pre-commit-config.yaml
+  - pyproject.toml
+  - uv.lock
+  - CLAUDE.md
+  - "*.tar.gz"
