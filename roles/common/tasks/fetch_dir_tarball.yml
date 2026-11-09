@@ -1,21 +1,51 @@
 ---
 # Inputs: instance, collect_dir, wb_src_dir (on the target host), wb_archive (file name in
-# <collect_dir>/<instance>/).
-- name: Archive the directory
-  ansible.builtin.command:
-    argv: [tar, czf, "/tmp/wb-{{ instance.name }}-{{ wb_archive }}", -C, "{{ wb_src_dir }}", .]
-  register: common_tar
-  changed_when: true
-  # rc 1 is "file changed as we read it", expected while the component runs.
-  failed_when: common_tar.rc > 1
+# <collect_dir>/<instance>/). A throwaway container (root inside, no network) archives the
+# directory, so files a component wrote as another uid or with mode 0600 are read without
+# become; the tarball is handed to the connection user, fetched, and the scratch dir removed.
+- name: Look up the connection user
+  ansible.builtin.include_role:
+    name: nanofaas.workbench.common
+    tasks_from: caller_ids
 
-- name: Fetch the tarball
-  ansible.builtin.fetch:
-    src: "/tmp/wb-{{ instance.name }}-{{ wb_archive }}"
-    dest: "{{ collect_dir }}/{{ instance.name }}/{{ wb_archive }}"
-    flat: true
+- name: Make a scratch dir
+  ansible.builtin.tempfile:
+    state: directory
+    prefix: "wb-{{ instance.name }}-"
+  register: common_scratch
 
-- name: Remove the remote tarball
-  ansible.builtin.file:
-    path: "/tmp/wb-{{ instance.name }}-{{ wb_archive }}"
-    state: absent
+- name: Archive, fetch and clean up
+  block:
+    - name: Archive the directory in a container
+      community.docker.docker_container:
+        name: "wb-{{ instance.name }}-collect"
+        image: "{{ common_probe_image }}"
+        state: started
+        recreate: true
+        detach: false
+        cleanup: true
+        network_mode: none
+        user: "0:0"
+        volumes:
+          - "{{ wb_src_dir }}:/src:ro"
+          - "{{ common_scratch.path }}:/out"
+        # tar exit 1 means a file changed or vanished while read (the component may be
+        # running): the archive is still written.
+        command:
+          - sh
+          - -c
+          - >-
+            tar czf /out/{{ wb_archive }} -C /src .; rc=$?;
+            chown {{ common_caller_ids }} /out/{{ wb_archive }} && [ "$rc" -le 1 ]
+
+    - name: Fetch the tarball
+      ansible.builtin.fetch:
+        src: "{{ common_scratch.path }}/{{ wb_archive }}"
+        dest: "{{ collect_dir }}/{{ instance.name }}/{{ wb_archive }}"
+        flat: true
+
+  always:
+    - name: Remove the scratch dir
+      ansible.builtin.file:
+        path: "{{ common_scratch.path }}"
+        state: absent

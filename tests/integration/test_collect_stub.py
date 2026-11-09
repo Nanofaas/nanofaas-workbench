@@ -1,11 +1,25 @@
-"""Collect tasks against a stub HTTP API, so they run where host networking cannot."""
+"""Collect tasks against a stub HTTP API, so they run where host networking cannot.
+
+Archiving runs in a throwaway container on the target, so these need Docker.
+"""
 
 import http.server
+import os
+import subprocess
 import sys
 import tarfile
 import threading
+from pathlib import Path
 
 import pytest
+import yaml
+
+ROOT = Path(__file__).resolve().parents[2]
+BUSYBOX = yaml.safe_load((ROOT / "roles/common/defaults/main.yml").read_text())[
+    "common_probe_image"
+]
+
+pytestmark = pytest.mark.docker
 
 
 @pytest.fixture
@@ -76,3 +90,47 @@ def test_log_collector_collect_stores_metrics_and_storage(
         out = tmp_path / "out" / "lc"
         assert "fluentbit_input_records_total" in (out / "metrics.txt").read_text()
         assert (out / "storage.tar.gz").exists() == has_tar
+
+
+def test_remote_collect_reads_files_a_container_wrote_as_another_uid(
+    run_playbook, tmp_path
+):
+    """Loki's data: uid 10001, a 0700 dir and a 0600 file the caller cannot read."""
+    data = tmp_path / "loki"
+    data.mkdir()
+    data.chmod(0o777)
+    volume = f"{data}:/d"
+
+    def in_container(user: str, script: str) -> None:
+        done = subprocess.run(
+            ["docker", "run", "--rm", "--user", user, "-v", volume, BUSYBOX,
+             "sh", "-c", script],
+            capture_output=True, text=True, check=False,
+        )  # fmt: skip
+        assert done.returncode == 0, done.stderr
+
+    in_container(
+        "10001:10001",
+        "mkdir /d/chunks && chmod 700 /d/chunks && echo x > /d/chunks/c"
+        " && chmod 600 /d/chunks/c",
+    )
+    try:
+        if sys.platform == "linux" and os.getuid() != 0:
+            # The point of the test; Docker Desktop's file sharing maps
+            # ownership to the Mac user, so only Linux can show it.
+            assert not os.access(data / "chunks", os.R_OK)
+        vs = {
+            "collect_dir": str(tmp_path / "out"),
+            "instances": [{"name": "lk", "component": "loki",
+                           "config": {"port": 3100, "data_dir": str(data)}}],
+        }  # fmt: skip
+        done = run_playbook("collect", vs, inventory=remote_inventory(tmp_path))
+        assert done.returncode == 0, done.stdout + done.stderr
+        archive = tmp_path / "out" / "lk" / "data.tar.gz"
+        assert archive.stat().st_uid == os.getuid()
+        with tarfile.open(archive) as t:
+            member = t.extractfile("./chunks/c")
+            assert member is not None
+            assert member.read() == b"x\n"
+    finally:
+        in_container("0:0", "rm -rf /d/chunks")
