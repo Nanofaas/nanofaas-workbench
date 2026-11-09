@@ -1,12 +1,23 @@
 ---
 # Shared by deploy, collect and undeploy: the collection's own check of the
 # host vars file (docs/vars.md). Callers may validate more.
+- name: The vars file has an instances list
+  ansible.builtin.assert:
+    that:
+      - instances is defined
+      - instances is sequence
+      - instances is not string
+      - instances is not mapping
+    fail_msg: >-
+      the vars file {{ workbench_vars }} must define "instances" as a list
+    quiet: true
+
 - name: Instance is well formed
   ansible.builtin.assert:
     that:
       - item.name is defined
       - item.name is string
-      - item.name is match('^[a-z0-9-]+$')
+      - item.name is match('^[a-z0-9-]+\Z')
       - (instances | map(attribute='name') | select('equalto', item.name) | list | length) == 1
       - item.component is defined
       - item.component in workbench_components
@@ -18,6 +29,9 @@
       form container|pod; cpuset a kernel CPU list such as 2-3,6 (got
       {{ item | to_json }})
     quiet: true
+  vars:
+    workbench_components: [prometheus, loki, log-collector, loadgen, node-exporter, cadvisor, supervisor]
+    workbench_cpuset_re: '^[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*\Z'
   loop: "{{ instances }}"
   loop_control:
     label: "{{ item.name | default('<no name>') }}"

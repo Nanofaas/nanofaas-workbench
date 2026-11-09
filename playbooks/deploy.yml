@@ -5,9 +5,6 @@
   gather_facts: false
   vars_files:
     - "{{ workbench_vars }}"
-  vars:
-    workbench_components: [prometheus, loki, log-collector, loadgen, node-exporter, cadvisor, supervisor]
-    workbench_cpuset_re: '^[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*$'
   tasks:
     - name: Validate the host vars file
       ansible.builtin.import_tasks: tasks/validate_vars.yml
