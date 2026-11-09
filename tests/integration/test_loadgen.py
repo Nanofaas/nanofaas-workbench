@@ -77,19 +77,15 @@ def wait_state(container: str, want: str, timeout=60) -> str:
 
 
 @pytest.mark.docker
-def test_one_shot_script_writes_emitted_and_result_rows(run_playbook, tmp_path, echo):
+def test_one_shot_script_writes_emitted_and_result_rows(
+    run_playbook, tmp_path, echo, generator_rows
+):
     vs, out, container = loadgen_vars(tmp_path, echo, 2)
     try:
         done = run_playbook("deploy", vs)
         assert done.returncode == 0, done.stdout + done.stderr
         assert wait_state(container, "exited").startswith("exited 0")
-        envelopes = [
-            json.loads(line)
-            for line in (out / "generator.jsonl").read_text().splitlines()
-        ]
-        # What nanolab's generator_rows does: json.loads(envelope["msg"]).
-        rows = [json.loads(e["msg"]) for e in envelopes if "msg" in e]
-        rows = [r for r in rows if isinstance(r, dict)]
+        rows = generator_rows(out / "generator.jsonl")
         emitted = [r for r in rows if r.get("event") == "emitted"]
         results = [r for r in rows if r.get("event") == "result"]
         # Owned by the caller (on Docker Desktop this passes either way: the

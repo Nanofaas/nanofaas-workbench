@@ -44,7 +44,7 @@ def poll(fn, seconds: int, what: str):
     pytest.fail(f"never {what}: {got}")
 
 
-def test_one_shot_shape(run_playbook, host_get, echo, tmp_path):
+def test_one_shot_shape(run_playbook, host_get, echo, generator_rows, tmp_path):
     done = docker(
         "build", "-t", IMAGE, "-f", str(ROOT / "images/supervisor/Dockerfile"),
         str(ROOT),
@@ -157,14 +157,8 @@ def test_one_shot_shape(run_playbook, host_get, echo, tmp_path):
                            "{{.State.Status}}").stdout.strip() == "exited",
             60, "loadgen exit",
         )  # fmt: skip
-        rows = [
-            json.loads(json.loads(line)["msg"])
-            for line in (out / "generator.jsonl").read_text().splitlines()
-            if "msg" in json.loads(line)
-        ]
-        results = [
-            r for r in rows if isinstance(r, dict) and r.get("event") == "result"
-        ]
+        rows = generator_rows(out / "generator.jsonl")
+        results = [r for r in rows if r["event"] == "result"]
         assert len(results) == 3
 
         if docker("info", "--format", "{{.OperatingSystem}}").stdout.strip() == (

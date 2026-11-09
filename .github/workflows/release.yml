@@ -17,13 +17,15 @@ jobs:
       version: ${{ steps.check.outputs.version }}
     steps:
       - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --locked --all-groups
       - id: check
         name: Tag, galaxy.yml and the supervisor image tag name one version
         run: |
-          version=$(sed -n 's/^version: *//p' galaxy.yml)
+          version=$(uv run --locked python -c 'import yaml; print(yaml.safe_load(open("galaxy.yml"))["version"])')
           [ "$GITHUB_REF_NAME" = "v$version" ] \
             || { echo "tag $GITHUB_REF_NAME != v$version (galaxy.yml)"; exit 1; }
-          grep -qx "supervisor_image: ghcr.io/nanofaas/workbench-supervisor:$version" \
+          grep -Fqx "supervisor_image: ghcr.io/nanofaas/workbench-supervisor:$version" \
             roles/supervisor/defaults/main.yml \
             || { echo "roles/supervisor/defaults/main.yml does not name $version"; exit 1; }
           echo "version=$version" >> "$GITHUB_OUTPUT"
@@ -73,6 +75,12 @@ jobs:
           VERSION: ${{ needs.verify.outputs.version }}
           DIGEST: ${{ needs.image.outputs.digest }}
         run: |
-          gh release create "$GITHUB_REF_NAME" "dist/nanofaas-workbench-$VERSION.tar.gz" \
-            --title "$GITHUB_REF_NAME" \
-            --notes "Supervisor image: ghcr.io/nanofaas/workbench-supervisor:$VERSION@$DIGEST"
+          tarball="dist/nanofaas-workbench-$VERSION.tar.gz"
+          notes="Supervisor image: ghcr.io/nanofaas/workbench-supervisor:$VERSION@$DIGEST"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$tarball" --clobber
+            gh release edit "$GITHUB_REF_NAME" --notes "$notes"
+          else
+            gh release create "$GITHUB_REF_NAME" "$tarball" \
+              --title "$GITHUB_REF_NAME" --notes "$notes"
+          fi

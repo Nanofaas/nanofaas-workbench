@@ -128,3 +128,21 @@ def echo(tmp_path, free_port):
     assert done.returncode == 0, done.stderr
     yield f"http://127.0.0.1:{free_port}/cgi-bin/echo"
     subprocess.run(["docker", "rm", "-f", name], check=False, capture_output=True)
+
+
+@pytest.fixture
+def generator_rows():
+    """Read generator.jsonl as nanolab does: JSON-object rows carrying an event."""
+
+    def go(path: Path) -> list[dict]:
+        rows = []
+        for line in path.read_text().splitlines():
+            try:
+                row = json.loads(json.loads(line)["msg"])
+            except (ValueError, KeyError, TypeError):
+                continue  # k6's own log lines
+            if isinstance(row, dict) and "event" in row:
+                rows.append(row)
+        return rows
+
+    return go

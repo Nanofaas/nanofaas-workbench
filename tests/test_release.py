@@ -25,3 +25,22 @@ def test_release_workflow_has_the_guard_image_and_release_jobs():
     assert "galaxy.yml" in verify
     assert "roles/supervisor/defaults/main.yml" in verify
     assert "GITHUB_REF_NAME" in verify
+
+
+def test_release_workflow_permissions_digest_platforms_and_tarball():
+    text = (ROOT / ".github/workflows/release.yml").read_text()
+    jobs = yaml.safe_load(text)["jobs"]
+    assert jobs["release"]["permissions"]["contents"] == "write"
+    assert jobs["image"]["permissions"]["packages"] == "write"
+    build = next(s for s in jobs["image"]["steps"] if s.get("id") == "push")
+    assert set(build["with"]["platforms"].split(",")) == {
+        "linux/amd64",
+        "linux/arm64",
+    }
+    assert jobs["image"]["outputs"]["digest"] == "${{ steps.push.outputs.digest }}"
+    steps = jobs["release"]["steps"]
+    publish = next(s for s in steps if "gh release" in s.get("run", ""))
+    assert publish["env"]["DIGEST"] == "${{ needs.image.outputs.digest }}"
+    assert "$DIGEST" in publish["run"]
+    assert "nanofaas-workbench-$VERSION.tar.gz" in publish["run"]
+    assert any("ansible-galaxy collection build" in s.get("run", "") for s in steps)
