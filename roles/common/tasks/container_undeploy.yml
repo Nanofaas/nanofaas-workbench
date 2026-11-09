@@ -8,7 +8,9 @@
   community.docker.docker_container:
     name: "wb-{{ instance.name }}"
     state: absent
-    force_kill: true
+    # wb_graceful: SIGTERM and a 10 s grace instead of an immediate kill.
+    force_kill: "{{ not (wb_graceful | default(false)) }}"
+    stop_timeout: 10
   when:
     - common_found.exists
     - (common_found.container.Config.Labels | default({})).get('nanofaas.workbench/instance', '') == instance.name

@@ -1,0 +1,12 @@
+---
+- name: Stop with a grace period and remove the container
+  ansible.builtin.include_role:
+    name: nanofaas.workbench.common
+    tasks_from: container_undeploy
+  vars:
+    wb_graceful: true
+
+- name: Remove the scripts copy
+  ansible.builtin.file:
+    path: "/tmp/wb-{{ instance.name }}"
+    state: absent

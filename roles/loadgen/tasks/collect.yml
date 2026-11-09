@@ -1,0 +1,12 @@
+---
+# On the controller the output dir already is the caller's: nothing to fetch.
+- name: Fetch the output dir as a tarball
+  ansible.builtin.include_role:
+    name: nanofaas.workbench.common
+    tasks_from: fetch_dir_tarball
+  vars:
+    wb_src_dir: "{{ instance.config.output_dir }}"
+    wb_archive: "loadgen-out.tar.gz"
+  when:
+    - collect_dir is defined
+    - inventory_hostname not in ['localhost', '127.0.0.1']

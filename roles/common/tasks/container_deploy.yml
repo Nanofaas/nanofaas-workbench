@@ -1,5 +1,6 @@
 ---
-# Inputs: instance, wb_image, wb_port (waited on, at wb_host, default 127.0.0.1); optional wb_command,
+# Inputs: instance, wb_image, wb_port (waited on, at wb_host, default 127.0.0.1; omit it for a job);
+# optional wb_command, wb_entrypoint, wb_restart_policy (default unless-stopped),
 # wb_volumes, wb_ports (published), wb_network_mode (default: bridge),
 # wb_pid_mode, wb_restart (true restarts the container, e.g. after a mounted file changed),
 # wb_env (dict), wb_read_only, wb_cap_drop, wb_security_opts, wb_cpus, wb_memory,
@@ -11,7 +12,8 @@
     command: "{{ wb_command | default(omit) }}"
     state: started
     restart: "{{ wb_restart | default(false) }}"
-    restart_policy: unless-stopped
+    restart_policy: "{{ wb_restart_policy | default('unless-stopped') }}"
+    entrypoint: "{{ wb_entrypoint | default(omit) }}"
     network_mode: "{{ wb_network_mode | default(omit) }}"
     ports: "{{ wb_ports | default(omit) }}"
     pid_mode: "{{ wb_pid_mode | default(omit) }}"
@@ -33,6 +35,7 @@
 # here, so there it is probed from a throwaway host-network container instead.
 - name: Ask the engine what it is, once
   when:
+    - wb_port is defined
     - (wb_network_mode | default('')) == 'host'
     - common_desktop is not defined
   block:
@@ -47,6 +50,7 @@
 
 - name: Probe the port from inside the Docker VM
   when:
+    - wb_port is defined
     - (wb_network_mode | default('')) == 'host'
     - common_desktop | default(false)
   ansible.builtin.command:
@@ -59,7 +63,9 @@
   changed_when: false
 
 - name: Wait for the port
-  when: (wb_network_mode | default('')) != 'host' or not (common_desktop | default(false))
+  when:
+    - wb_port is defined
+    - (wb_network_mode | default('')) != 'host' or not (common_desktop | default(false))
   ansible.builtin.wait_for:
     host: "{{ wb_host | default('127.0.0.1') }}"
     port: "{{ wb_port }}"

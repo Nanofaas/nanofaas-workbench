@@ -1,0 +1,64 @@
+---
+- name: Fail on the pod form (loadgen is a container job)
+  ansible.builtin.include_role:
+    name: nanofaas.workbench.common
+    tasks_from: pod_unsupported
+  when: (instance.form | default('container')) == 'pod'
+
+- name: Check the required config
+  ansible.builtin.assert:
+    that:
+      - instance.config.script is defined
+      - instance.config.output_dir is defined
+    fail_msg: "instance {{ instance.name }}: loadgen needs config.script and config.output_dir"
+    quiet: true
+
+- name: Create the scripts dir
+  ansible.builtin.file:
+    path: "/tmp/wb-{{ instance.name }}/scripts"
+    state: directory
+    mode: "0755"
+
+- name: Install the bundled script
+  ansible.builtin.copy:
+    src: "scripts/{{ instance.config.script }}"
+    dest: "/tmp/wb-{{ instance.name }}/scripts/{{ instance.config.script }}"
+    mode: "0644"
+
+# ponytail: 0777 because k6 runs as uid 12345; the caller still owns the path.
+- name: Create the output dir
+  ansible.builtin.file:
+    path: "{{ instance.config.output_dir }}"
+    state: directory
+    mode: "0777"
+
+- name: Run k6 (container form)
+  ansible.builtin.include_role:
+    name: nanofaas.workbench.common
+    tasks_from: container_deploy
+  vars:
+    wb_image: "{{ loadgen_image }}"
+    # Host network: schedules use loopback URLs.
+    wb_network_mode: "{{ instance.config.network | default('host') }}"
+    wb_restart_policy: "no"
+    wb_entrypoint: [sh, -c]
+    wb_command:
+      - "exec k6 run --quiet --log-format=json --log-output=file=/out/generator.jsonl /scripts/{{ instance.config.script }} 2>/out/generator.stderr"
+    wb_env: "{{ instance.config.env | default({}) }}"
+    # Caller mounts are read-only; only the output dir is writable.
+    wb_volumes: >-
+      {{ ['/tmp/wb-' ~ instance.name ~ '/scripts:/scripts:ro', instance.config.output_dir ~ ':/out']
+         + (instance.config.mounts | default({}) | dict2items
+            | map(attribute='key') | zip(instance.config.mounts | default({}) | dict2items | map(attribute='value'))
+            | map('join', ':') | map('regex_replace', '$', ':ro') | list) }}
+
+# A job has no port: it counts as started when it runs or has already exited 0.
+- name: Wait for the job to have started
+  community.docker.docker_container_info:
+    name: "wb-{{ instance.name }}"
+  register: loadgen_state
+  until: >-
+    loadgen_state.container.State.Running or
+    (loadgen_state.container.State.Status == 'exited' and loadgen_state.container.State.ExitCode == 0)
+  retries: 30
+  delay: 1
