@@ -1,4 +1,5 @@
 ---
+# Inputs: instance; optional wb_graceful (SIGTERM and a 10 s grace instead of an immediate kill).
 - name: Look the container up
   community.docker.docker_container_info:
     name: "wb-{{ instance.name }}"

@@ -59,6 +59,12 @@
   register: loadgen_state
   until: >-
     loadgen_state.container.State.Running or
-    (loadgen_state.container.State.Status == 'exited' and loadgen_state.container.State.ExitCode == 0)
+    loadgen_state.container.State.Status == 'exited'
   retries: 30
   delay: 1
+
+- name: Fail fast when k6 exited non-zero
+  ansible.builtin.assert:
+    that: loadgen_state.container.State.ExitCode == 0
+    fail_msg: "instance {{ instance.name }}: k6 exited {{ loadgen_state.container.State.ExitCode }}; see generator.stderr in output_dir"
+    quiet: true

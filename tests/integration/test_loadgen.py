@@ -2,6 +2,7 @@ import hashlib
 import json
 import subprocess
 import time
+import uuid
 from pathlib import Path
 
 import pytest
@@ -10,7 +11,9 @@ ROOT = Path(__file__).parents[2]
 SCRIPT = ROOT / "roles/loadgen/files/scripts/one-shot.js"
 # sha256 of nanolab's assets/k6/one-shot.js when it was moved here verbatim.
 SCRIPT_SHA256 = "a8addc6c3d4b607b1d592139d16b27c010215fdf29e1040ef5e0d52660148c51"
-ECHO_IMAGE = "busybox@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec"
+ECHO_IMAGE = (
+    "busybox@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec"
+)
 
 
 def docker(*args: str) -> subprocess.CompletedProcess:
@@ -25,7 +28,7 @@ def test_script_moved_verbatim():
 
 @pytest.fixture
 def echo(tmp_path, free_port):
-    """A host-network HTTP target answering POSTs with a JSON body."""
+    """Serve a host-network HTTP target answering POSTs with a JSON body."""
     cgi = tmp_path / "www" / "cgi-bin" / "echo"
     cgi.parent.mkdir(parents=True)
     cgi.write_text(
@@ -33,7 +36,7 @@ def echo(tmp_path, free_port):
         'echo \'{"status":"success","executionId":"e1"}\'\n'
     )
     cgi.chmod(0o755)
-    name = "wb-test-echo"
+    name = f"wb-test-echo-{uuid.uuid4().hex[:8]}"
     docker("rm", "-f", name)
     done = docker(
         "run", "-d", "--name", name, "--network", "host",
@@ -46,6 +49,7 @@ def echo(tmp_path, free_port):
 
 
 def loadgen_vars(tmp_path, url, rows, duration="30s"):
+    name = f"lg{uuid.uuid4().hex[:8]}"
     now = time.time()
     sched = tmp_path / "sched"
     sched.mkdir(exist_ok=True)
@@ -59,31 +63,35 @@ def loadgen_vars(tmp_path, url, rows, duration="30s"):
         )
     )  # fmt: skip
     out = tmp_path / "out"
-    return {
-        "instances": [
-            {
-                "name": "lg",
-                "component": "loadgen",
-                "config": {
-                    "script": "one-shot.js",
-                    "env": {
-                        "ONE_SHOT_SCHEDULE": "/sched/s.json",
-                        "ONE_SHOT_VUS": str(min(2, rows)),
-                        "ONE_SHOT_DURATION": duration,
+    return (
+        {
+            "instances": [
+                {
+                    "name": name,
+                    "component": "loadgen",
+                    "config": {
+                        "script": "one-shot.js",
+                        "env": {
+                            "ONE_SHOT_SCHEDULE": "/sched/s.json",
+                            "ONE_SHOT_VUS": str(min(2, rows)),
+                            "ONE_SHOT_DURATION": duration,
+                        },
+                        "mounts": {str(sched): "/sched"},
+                        "output_dir": str(out),
                     },
-                    "mounts": {str(sched): "/sched"},
-                    "output_dir": str(out),
-                },
-            }
-        ]
-    }, out
+                }
+            ]
+        },
+        out,
+        f"wb-{name}",
+    )
 
 
-def wait_state(want: str, timeout=60) -> str:
+def wait_state(container: str, want: str, timeout=60) -> str:
     state = ""
     for _ in range(timeout):
         state = docker(
-            "inspect", "wb-lg", "--format", "{{.State.Status}} {{.State.ExitCode}}"
+            "inspect", container, "--format", "{{.State.Status}} {{.State.ExitCode}}"
         ).stdout.strip()
         if state.startswith(want):
             return state
@@ -92,14 +100,12 @@ def wait_state(want: str, timeout=60) -> str:
 
 
 @pytest.mark.docker
-def test_one_shot_script_writes_emitted_and_result_rows(
-    run_playbook, tmp_path, echo
-):
-    vs, out = loadgen_vars(tmp_path, echo, 2)
+def test_one_shot_script_writes_emitted_and_result_rows(run_playbook, tmp_path, echo):
+    vs, out, container = loadgen_vars(tmp_path, echo, 2)
     try:
         done = run_playbook("deploy", vs)
         assert done.returncode == 0, done.stdout + done.stderr
-        assert wait_state("exited").startswith("exited 0")
+        assert wait_state(container, "exited").startswith("exited 0")
         envelopes = [
             json.loads(line)
             for line in (out / "generator.jsonl").read_text().splitlines()
@@ -119,21 +125,21 @@ def test_one_shot_script_writes_emitted_and_result_rows(
 
 @pytest.mark.docker
 def test_exit_code_visible_after_finish(run_playbook, tmp_path, echo):
-    vs, _ = loadgen_vars(tmp_path, echo, 1)
+    vs, _, container = loadgen_vars(tmp_path, echo, 1)
     try:
         assert run_playbook("deploy", vs).returncode == 0
-        assert wait_state("exited") == "exited 0"
+        assert wait_state(container, "exited") == "exited 0"
     finally:
         run_playbook("undeploy", vs)
 
 
 @pytest.mark.docker
 def test_undeploy_stops_a_running_generator(run_playbook, tmp_path, echo):
-    vs, _ = loadgen_vars(tmp_path, echo, 200, duration="5m")
+    vs, _, container = loadgen_vars(tmp_path, echo, 200, duration="5m")
     assert run_playbook("deploy", vs).returncode == 0
-    assert wait_state("running", 10).startswith("running")
+    assert wait_state(container, "running", 10).startswith("running")
     started = time.monotonic()
     done = run_playbook("undeploy", vs)
     assert done.returncode == 0, done.stdout + done.stderr
     assert time.monotonic() - started < 15
-    assert docker("ps", "-aq", "--filter", "name=wb-lg").stdout.strip() == ""
+    assert docker("ps", "-aq", "--filter", f"name={container}").stdout.strip() == ""
