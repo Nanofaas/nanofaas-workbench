@@ -73,8 +73,9 @@ def validate(spec: object) -> dict[str, Any]:
         raise ValueError("labels map label names to strings")
     if "job" in labels:
         raise ValueError("scrape_up takes job as its own param, not in labels")
-    if params.get("staleSeconds", 1) <= 0:
-        raise ValueError("staleSeconds is positive")
+    stale = params.get("staleSeconds", 1)
+    if not (math.isfinite(stale) and stale > 0):
+        raise ValueError("staleSeconds is finite and positive")
     if kind == "swap_quiet" and not DURATION.match(params["window"]):
         raise ValueError("window is a Prometheus duration such as 30s")
     if kind == "http_ok" and not (

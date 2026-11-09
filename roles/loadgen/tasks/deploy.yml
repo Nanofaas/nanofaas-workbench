@@ -119,10 +119,14 @@
         msg: "loadgen {{ instance.name }} already ran; undeploy it first"
       when:
         - loadgen_container_prior.exists
+        - loadgen_container_prior.container.State.Status != 'created'
         - not loadgen_container_prior.container.State.Running
 
+    # A container that was created but never started has not run yet.
     - name: Start k6
-      when: not loadgen_container_prior.exists
+      when: >-
+        not loadgen_container_prior.exists
+        or loadgen_container_prior.container.State.Status == 'created'
       ansible.builtin.include_role:
         name: nanofaas.workbench.common
         tasks_from: container_deploy

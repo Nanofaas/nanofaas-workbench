@@ -134,3 +134,50 @@ def test_remote_collect_reads_files_a_container_wrote_as_another_uid(
             assert member.read() == b"x\n"
     finally:
         in_container("0:0", "rm -rf /d/chunks")
+
+
+def loki_collect(run_playbook, tmp_path, data):
+    vs = {
+        "collect_dir": str(tmp_path / "out"),
+        "instances": [{"name": "lk", "component": "loki",
+                       "config": {"port": 3100, "data_dir": str(data)}}],
+    }  # fmt: skip
+    return run_playbook("collect", vs, inventory=remote_inventory(tmp_path))
+
+
+def test_collect_fails_when_the_archive_cannot_be_completed(run_playbook, tmp_path):
+    """A source tar cannot enter exits 1 with an unusable archive; that is a failure."""
+    not_a_dir = tmp_path / "file"
+    not_a_dir.write_text("x")
+    done = loki_collect(run_playbook, tmp_path, not_a_dir)
+    assert done.returncode != 0, done.stdout
+    assert not (tmp_path / "out" / "lk" / "data.tar.gz").exists()
+
+
+def test_collect_fails_clearly_for_a_missing_source_dir(run_playbook, tmp_path):
+    missing = tmp_path / "missing"
+    done = loki_collect(run_playbook, tmp_path, missing)
+    assert done.returncode != 0, done.stdout
+    assert "does not exist" in done.stdout
+    assert not missing.exists()
+
+
+def test_collect_does_not_destroy_an_instance_named_collect(run_playbook, tmp_path):
+    name = "wb-lk-collect"  # the container of an instance called "lk-collect"
+    subprocess.run(["docker", "rm", "-f", name], check=False, capture_output=True)
+    subprocess.run(
+        ["docker", "run", "-d", "--name", name, BUSYBOX, "sleep", "300"],
+        check=True, capture_output=True,
+    )  # fmt: skip
+    try:
+        data = tmp_path / "d"
+        data.mkdir()
+        done = loki_collect(run_playbook, tmp_path, data)
+        assert done.returncode == 0, done.stdout + done.stderr
+        running = subprocess.run(
+            ["docker", "inspect", "-f", "{{.State.Running}}", name],
+            capture_output=True, text=True, check=False,
+        )  # fmt: skip
+        assert running.stdout.strip() == "true"
+    finally:
+        subprocess.run(["docker", "rm", "-f", name], check=False, capture_output=True)

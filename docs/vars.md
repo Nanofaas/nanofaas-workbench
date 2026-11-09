@@ -33,6 +33,8 @@ that already exists keeps its owner and mode, and the caller makes it writable b
 - **Container form** (and `collect` of any form that has something to fetch): a Docker engine the
   connection user can reach, and on the target a Python with the `requests` and `docker` packages,
   which `community.docker` needs. `collect` archives inside a container, so `tar` is not needed.
+  Docker with `userns-remap` cannot write the collect scratch dir (container root maps to an
+  unprivileged uid), so `collect` fails there.
 - **Pod form:** `helm` 3 and `kubectl` on the target, and a kubeconfig there (`config.kubeconfig`,
   or the default one). The chart is copied to the target, helm runs there.
 - `localhost` / `127.0.0.1` run with the controller's own Python (`ansible_playbook_python`).

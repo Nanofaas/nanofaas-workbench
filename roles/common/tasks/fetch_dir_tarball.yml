@@ -8,6 +8,17 @@
     name: nanofaas.workbench.common
     tasks_from: caller_ids
 
+# Docker would create a missing bind-mount source, root-owned and empty.
+- name: Look the source directory up
+  ansible.builtin.stat:
+    path: "{{ wb_src_dir }}"
+  register: common_src
+
+- name: Refuse a missing source directory
+  ansible.builtin.fail:
+    msg: "{{ wb_src_dir }} does not exist on {{ inventory_hostname }}; nothing to collect"
+  when: not common_src.stat.exists
+
 - name: Make a scratch dir
   ansible.builtin.tempfile:
     state: directory
@@ -18,7 +29,8 @@
   block:
     - name: Archive the directory in a container
       community.docker.docker_container:
-        name: "wb-{{ instance.name }}-collect"
+        # Underscores are not valid in instance names, so no instance's container can be this one.
+        name: "wb_{{ instance.name }}_collect"
         image: "{{ common_probe_image }}"
         state: started
         recreate: true
@@ -29,14 +41,17 @@
         volumes:
           - "{{ wb_src_dir }}:/src:ro"
           - "{{ common_scratch.path }}:/out"
-        # tar exit 1 means a file changed or vanished while read (the component may be
-        # running): the archive is still written.
+        # busybox tar exits 1 both when a file changed or vanished while read (the archive is
+        # still valid) and on fatal errors (it is truncated): non-zero counts only when the
+        # archive lists cleanly.
         command:
           - sh
           - -c
           - >-
-            tar czf /out/{{ wb_archive }} -C /src .; rc=$?;
-            chown {{ common_caller_ids }} /out/{{ wb_archive }} && [ "$rc" -le 1 ]
+            tar czf /out/{{ wb_archive }} -C /src . 2>/tmp/tar.err; rc=$?;
+            if [ "$rc" -ne 0 ] && ! tar tzf /out/{{ wb_archive }} >/dev/null 2>&1;
+            then cat /tmp/tar.err >&2; exit 1; fi;
+            chown {{ common_caller_ids }} /out/{{ wb_archive }}
 
     - name: Fetch the tarball
       ansible.builtin.fetch:

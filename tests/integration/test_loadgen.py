@@ -153,3 +153,18 @@ def test_redeploy_of_a_finished_job_fails(run_playbook, tmp_path, echo):
         assert (out / "generator.jsonl").read_text() == before
     finally:
         run_playbook("undeploy", vs)
+
+
+@pytest.mark.docker
+def test_deploy_starts_a_container_that_was_created_but_never_started(
+    run_playbook, tmp_path, echo
+):
+    vs, _, container = loadgen_vars(tmp_path, echo, 1)
+    docker("rm", "-f", container)
+    assert docker("create", "--name", container, "busybox", "true").returncode == 0
+    try:
+        done = run_playbook("deploy", vs)
+        assert done.returncode == 0, done.stdout + done.stderr
+        assert wait_state(container, "exited") == "exited 0"
+    finally:
+        run_playbook("undeploy", vs)

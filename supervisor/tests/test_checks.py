@@ -226,6 +226,14 @@ def test_validate_fills_defaults():
             "kind": "container_running",
             "params": {"name": "c", "node": "n", "staleSeconds": 0},
         },
+        {
+            "kind": "container_running",
+            "params": {"name": "c", "node": "n", "staleSeconds": float("nan")},
+        },
+        {
+            "kind": "container_running",
+            "params": {"name": "c", "node": "n", "staleSeconds": float("inf")},
+        },
         {"kind": "http_ok", "params": {"url": "http://x/", "timeoutSeconds": 0}},
     ],
 )
