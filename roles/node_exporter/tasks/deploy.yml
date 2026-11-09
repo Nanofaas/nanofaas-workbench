@@ -1,0 +1,23 @@
+---
+- name: Container form
+  when: (instance.form | default('container')) == 'container'
+  block:
+    - name: Run node_exporter
+      ansible.builtin.include_role:
+        name: nanofaas.workbench.common
+        tasks_from: container_deploy
+      vars:
+        wb_image: "{{ node_exporter_image }}"
+        wb_port: "{{ instance.config.port | default(9100) }}"
+        wb_pid_mode: host
+        wb_command:
+          - --path.rootfs=/host
+          - --web.listen-address=:{{ instance.config.port | default(9100) }}
+        wb_volumes:
+          - /:/host:ro,rslave
+
+- name: Pod form
+  ansible.builtin.include_role:
+    name: nanofaas.workbench.common
+    tasks_from: pod_unsupported
+  when: instance.form | default('container') == 'pod'

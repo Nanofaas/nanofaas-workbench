@@ -1,0 +1,4 @@
+---
+- name: The common role is entered through tasks_from
+  ansible.builtin.fail:
+    msg: nanofaas.workbench.common has no main entry point

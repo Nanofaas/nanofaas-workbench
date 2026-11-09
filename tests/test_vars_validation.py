@@ -4,12 +4,12 @@ from pathlib import Path
 import pytest
 
 
-def deploy(tool, ansible_env, tmp_path: Path, instances: list[dict]):
+def deploy(tool, ansible_env, tmp_path: Path, instances: list[dict], playbook="deploy"):
     vars_file = tmp_path / "v.json"
     vars_file.write_text(json.dumps({"instances": instances}))
     return tool(
-        "ansible-playbook", "-i", "localhost,", "-c", "local",
-        "-e", f"workbench_vars={vars_file}", "nanofaas.workbench.deploy",
+        "ansible-playbook", "-i", "localhost,",
+        "-e", f"workbench_vars={vars_file}", f"nanofaas.workbench.{playbook}",
         env=ansible_env,
     )  # fmt: skip
 
@@ -23,7 +23,11 @@ def test_valid_vars_pass(tool, ansible_env, tmp_path):
         tool,
         ansible_env,
         tmp_path,
-        [inst(cpuset="2-3,6"), inst(name="p", component="prometheus", form="pod")],
+        [
+            inst(name="a", component="node-exporter", cpuset="2-3,6"),
+            inst(name="b", component="node-exporter", form="pod"),
+        ],
+        playbook="collect",  # roles run, but collect has nothing to touch
     )
     assert done.returncode == 0, done.stdout + done.stderr
 
@@ -73,7 +77,7 @@ def test_missing_instances_list_rejected(tool, ansible_env, tmp_path, body):
     vars_file = tmp_path / "v.json"
     vars_file.write_text(body)
     done = tool(
-        "ansible-playbook", "-i", "localhost,", "-c", "local",
+        "ansible-playbook", "-i", "localhost,",
         "-e", f"workbench_vars={vars_file}", "nanofaas.workbench.deploy",
         env=ansible_env,
     )  # fmt: skip

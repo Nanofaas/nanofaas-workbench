@@ -1,0 +1,5 @@
+---
+# Plays on this machine need no SSH. Inventory host vars outrank play vars,
+# so an explicit ansible_connection in the inventory still wins.
+ansible_connection: "{{ 'local' if inventory_hostname in ['localhost', '127.0.0.1'] else 'ssh' }}"
+ansible_python_interpreter: "{{ ansible_playbook_python if inventory_hostname in ['localhost', '127.0.0.1'] else 'auto_silent' }}"

@@ -1,10 +1,21 @@
 ---
-# Stub: validates the vars file; roles arrive with the components.
 - name: Workbench deploy
   hosts: all
   gather_facts: false
   vars_files:
+    - vars/connection.yml
     - "{{ workbench_vars }}"
   tasks:
     - name: Validate the host vars file
       ansible.builtin.import_tasks: tasks/validate_vars.yml
+
+    - name: Run deploy for each instance
+      # Ansible role names cannot hold a hyphen: component node-exporter is role node_exporter.
+      ansible.builtin.include_role:
+        name: "nanofaas.workbench.{{ item.component | replace('-', '_') }}"
+        tasks_from: deploy
+      vars:
+        instance: "{{ item }}"
+      loop: "{{ instances }}"
+      loop_control:
+        label: "{{ item.name }}"

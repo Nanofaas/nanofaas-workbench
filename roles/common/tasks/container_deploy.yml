@@ -1,0 +1,21 @@
+---
+- name: Run the container
+  community.docker.docker_container:
+    name: "wb-{{ instance.name }}"
+    image: "{{ wb_image }}"
+    command: "{{ wb_command | default(omit) }}"
+    state: started
+    restart_policy: unless-stopped
+    network_mode: "{{ wb_network_mode | default('host') }}"
+    pid_mode: "{{ wb_pid_mode | default(omit) }}"
+    volumes: "{{ wb_volumes | default(omit) }}"
+    cpuset_cpus: "{{ instance.cpuset | default(omit) }}"
+    labels:
+      nanofaas.workbench/instance: "{{ instance.name }}"
+      nanofaas.workbench/component: "{{ instance.component }}"
+
+- name: Wait for the port
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ wb_port }}"
+    timeout: 60
