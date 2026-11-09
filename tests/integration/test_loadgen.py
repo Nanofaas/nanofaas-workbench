@@ -12,9 +12,6 @@ ROOT = Path(__file__).parents[2]
 SCRIPT = ROOT / "roles/loadgen/files/scripts/one-shot.js"
 # sha256 of nanolab's assets/k6/one-shot.js when it was moved here verbatim.
 SCRIPT_SHA256 = "a8addc6c3d4b607b1d592139d16b27c010215fdf29e1040ef5e0d52660148c51"
-ECHO_IMAGE = (
-    "busybox@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec"
-)
 
 
 def docker(*args: str) -> subprocess.CompletedProcess:
@@ -25,28 +22,6 @@ def docker(*args: str) -> subprocess.CompletedProcess:
 
 def test_script_moved_verbatim():
     assert hashlib.sha256(SCRIPT.read_bytes()).hexdigest() == SCRIPT_SHA256
-
-
-@pytest.fixture
-def echo(tmp_path, free_port):
-    """Serve a host-network HTTP target answering POSTs with a JSON body."""
-    cgi = tmp_path / "www" / "cgi-bin" / "echo"
-    cgi.parent.mkdir(parents=True)
-    cgi.write_text(
-        '#!/bin/sh\nprintf "Content-type: application/json\\r\\n\\r\\n"\n'
-        'echo \'{"status":"success","executionId":"e1"}\'\n'
-    )
-    cgi.chmod(0o755)
-    name = f"wb-test-echo-{uuid.uuid4().hex[:8]}"
-    docker("rm", "-f", name)
-    done = docker(
-        "run", "-d", "--name", name, "--network", "host",
-        "-v", f"{tmp_path / 'www'}:/www:ro", ECHO_IMAGE,
-        "httpd", "-f", "-p", f"127.0.0.1:{free_port}", "-h", "/www",
-    )  # fmt: skip
-    assert done.returncode == 0, done.stderr
-    yield f"http://127.0.0.1:{free_port}/cgi-bin/echo"
-    docker("rm", "-f", name)
 
 
 def loadgen_vars(tmp_path, url, rows, duration="30s"):

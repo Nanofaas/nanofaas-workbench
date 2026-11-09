@@ -3,12 +3,16 @@
 import json
 import socket
 import subprocess
+import uuid
 from pathlib import Path
 
 import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
+ECHO_IMAGE = (
+    "busybox@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec"
+)
 DEPS_CACHE = ROOT / ".ansible" / "collections"  # gitignored, survives sessions
 
 
@@ -101,3 +105,26 @@ def host_get():
         return done.stdout
 
     return go
+
+
+@pytest.fixture
+def echo(tmp_path, free_port):
+    """Serve a host-network HTTP target answering POSTs with a JSON body."""
+    cgi = tmp_path / "www" / "cgi-bin" / "echo"
+    cgi.parent.mkdir(parents=True)
+    cgi.write_text(
+        '#!/bin/sh\nprintf "Content-type: application/json\\r\\n\\r\\n"\n'
+        'echo \'{"status":"success","executionId":"e1"}\'\n'
+    )
+    cgi.chmod(0o755)
+    name = f"wb-test-echo-{uuid.uuid4().hex[:8]}"
+    subprocess.run(["docker", "rm", "-f", name], check=False, capture_output=True)
+    done = subprocess.run(
+        ["docker", "run", "-d", "--name", name, "--network", "host",
+        "-v", f"{tmp_path / 'www'}:/www:ro", ECHO_IMAGE,
+        "httpd", "-f", "-p", f"127.0.0.1:{free_port}", "-h", "/www"],
+        capture_output=True, text=True, check=False,
+    )  # fmt: skip
+    assert done.returncode == 0, done.stderr
+    yield f"http://127.0.0.1:{free_port}/cgi-bin/echo"
+    subprocess.run(["docker", "rm", "-f", name], check=False, capture_output=True)
