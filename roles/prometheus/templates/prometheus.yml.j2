@@ -1,0 +1,16 @@
+global:
+  scrape_interval: {{ instance.config.scrape_interval | default('5s') }}
+scrape_configs:
+{% for job, targets in (instance.config.jobs | default({})).items() %}
+  - job_name: {{ job | to_json }}
+    honor_timestamps: false
+{% if targets %}
+    static_configs:
+{% for t in targets %}
+      - targets: [{{ t.target | to_json }}]
+        labels: {{ (t.labels | default({})) | to_json }}
+{% endfor %}
+{% else %}
+    static_configs: []
+{% endif %}
+{% endfor %}

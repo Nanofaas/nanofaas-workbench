@@ -1,0 +1,59 @@
+---
+- name: Fail on the pod form until it is implemented
+  ansible.builtin.include_role:
+    name: nanofaas.workbench.common
+    tasks_from: pod_unsupported
+  when: (instance.form | default('container')) == 'pod'
+
+- name: Check the required config
+  ansible.builtin.assert:
+    that:
+      - instance.config.port is defined
+      - instance.config.data_dir is defined
+    fail_msg: "instance {{ instance.name }}: prometheus needs config.port and config.data_dir"
+    quiet: true
+
+- name: Run Prometheus (container form)
+  when: (instance.form | default('container')) == 'container'
+  block:
+    - name: Create the config dir
+      ansible.builtin.file:
+        path: "/tmp/wb-{{ instance.name }}"
+        state: directory
+        mode: "0755"
+
+    - name: Render the config
+      register: prometheus_config
+      ansible.builtin.template:
+        src: prometheus.yml.j2
+        dest: "/tmp/wb-{{ instance.name }}/prometheus.yml"
+        mode: "0644"
+
+    # ponytail: 0777 because Prometheus runs as nobody; the caller still owns the path.
+    - name: Create the data dir
+      ansible.builtin.file:
+        path: "{{ instance.config.data_dir }}"
+        state: directory
+        mode: "0777"
+
+    - name: Run Prometheus
+      ansible.builtin.include_role:
+        name: nanofaas.workbench.common
+        tasks_from: container_deploy
+      vars:
+        wb_image: "{{ prometheus_image }}"
+        wb_port: "{{ instance.config.port }}"
+        wb_host: "{{ instance.config.bind | default('127.0.0.1') }}"
+        # A rendered file is a new inode under the single-file bind mount: restart to pick it up.
+        wb_restart: "{{ prometheus_config.changed }}"
+        # Host network: the targets include the caller's loopback tunnels.
+        wb_network_mode: host
+        wb_command:
+          - --config.file=/etc/prometheus/prometheus.yml
+          - --storage.tsdb.path=/prometheus
+          - "--storage.tsdb.retention.time={{ instance.config.retention | default('7d') }}"
+          - "--web.listen-address={{ instance.config.bind | default('127.0.0.1') }}:{{ instance.config.port }}"
+          - --web.enable-admin-api
+        wb_volumes:
+          - "/tmp/wb-{{ instance.name }}/prometheus.yml:/etc/prometheus/prometheus.yml:ro"
+          - "{{ instance.config.data_dir }}:/prometheus"

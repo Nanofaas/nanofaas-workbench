@@ -1,0 +1,3 @@
+---
+# prom/prometheus 3.16.0 (multi-arch index digest)
+prometheus_image: prom/prometheus@sha256:e04987641b57704f408e31f6373ba4138ecf27cb4a165d24aabb6c38fddd0f06

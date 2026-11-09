@@ -1,0 +1,21 @@
+---
+# Inputs: instance, collect_dir, wb_src_dir (on the target host), wb_archive (file name in
+# <collect_dir>/<instance>/).
+- name: Archive the directory
+  ansible.builtin.command:
+    argv: [tar, czf, "/tmp/wb-{{ instance.name }}-{{ wb_archive }}", -C, "{{ wb_src_dir }}", .]
+  register: common_tar
+  changed_when: true
+  # rc 1 is "file changed as we read it", expected while the component runs.
+  failed_when: common_tar.rc > 1
+
+- name: Fetch the tarball
+  ansible.builtin.fetch:
+    src: "/tmp/wb-{{ instance.name }}-{{ wb_archive }}"
+    dest: "{{ collect_dir }}/{{ instance.name }}/{{ wb_archive }}"
+    flat: true
+
+- name: Remove the remote tarball
+  ansible.builtin.file:
+    path: "/tmp/wb-{{ instance.name }}-{{ wb_archive }}"
+    state: absent

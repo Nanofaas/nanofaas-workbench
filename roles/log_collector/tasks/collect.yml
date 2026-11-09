@@ -1,0 +1,39 @@
+---
+- name: Check the required config
+  ansible.builtin.assert:
+    that:
+      - collect_dir is defined
+    fail_msg: "instance {{ instance.name }}: collect needs collect_dir"
+    quiet: true
+
+- name: Read the metrics
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ instance.config.port }}/api/v2/metrics/prometheus"
+    return_content: true
+  register: log_collector_metrics
+
+- name: Create the collect dir
+  ansible.builtin.file:
+    path: "{{ collect_dir }}/{{ instance.name }}"
+    state: directory
+    mode: "0755"
+  delegate_to: localhost
+  become: false
+
+- name: Store the metrics
+  ansible.builtin.copy:
+    content: "{{ log_collector_metrics.content }}"
+    dest: "{{ collect_dir }}/{{ instance.name }}/metrics.txt"
+    mode: "0644"
+  delegate_to: localhost
+  become: false
+
+# On the controller the storage dir already is the caller's: nothing to fetch.
+- name: Fetch the storage dir as a tarball
+  ansible.builtin.include_role:
+    name: nanofaas.workbench.common
+    tasks_from: fetch_dir_tarball
+  vars:
+    wb_src_dir: "{{ instance.config.storage_dir }}"
+    wb_archive: storage.tar.gz
+  when: inventory_hostname not in ['localhost', '127.0.0.1']

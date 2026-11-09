@@ -1,0 +1,73 @@
+---
+- name: Fail on the pod form until it is implemented
+  ansible.builtin.include_role:
+    name: nanofaas.workbench.common
+    tasks_from: pod_unsupported
+  when: (instance.form | default('container')) == 'pod'
+
+- name: Check the required config
+  ansible.builtin.assert:
+    that:
+      - instance.config.port is defined
+      - instance.config.storage_dir is defined
+      - instance.config.config_files is defined
+      - instance.config.loki is defined
+    fail_msg: "instance {{ instance.name }}: log-collector needs config.port, storage_dir, config_files and loki"
+    quiet: true
+
+- name: Run the log collector (container form)
+  when: (instance.form | default('container')) == 'container'
+  block:
+    - name: Create the config dir
+      ansible.builtin.file:
+        path: "/tmp/wb-{{ instance.name }}"
+        state: directory
+        mode: "0755"
+
+    - name: Place the config files
+      register: log_collector_config
+      ansible.builtin.copy:
+        src: "{{ instance.config.config_files[log_collector_file] }}"
+        dest: "/tmp/wb-{{ instance.name }}/{{ log_collector_file }}"
+        mode: "0644"
+      loop: [fluent-bit.conf, parsers.conf]
+      loop_control:
+        loop_var: log_collector_file
+
+    - name: Create the storage dir
+      ansible.builtin.file:
+        path: "{{ instance.config.storage_dir }}"
+        state: directory
+        mode: "0777"
+
+    - name: Run the log collector
+      ansible.builtin.include_role:
+        name: nanofaas.workbench.common
+        tasks_from: container_deploy
+      vars:
+        wb_image: "{{ log_collector_image }}"
+        wb_port: "{{ instance.config.port }}"
+        # A replaced file is a new inode under the single-file bind mount: restart to pick it up.
+        wb_restart: "{{ log_collector_config.changed }}"
+        # Host network: Loki is reached through a tunnel on the host's loopback.
+        wb_network_mode: host
+        wb_read_only: true
+        wb_cap_drop: [ALL]
+        wb_security_opts: [no-new-privileges]
+        wb_cpus: "{{ instance.config.cpus | default(omit) }}"
+        wb_memory: "{{ (instance.config.memory_mib ~ 'm') if instance.config.memory_mib is defined else omit }}"
+        wb_log_driver: local
+        wb_log_options:
+          max-size: 10m
+          max-file: "2"
+        wb_env: >-
+          {{ (instance.config.env | default({})) | combine({
+            'LOKI_HOST': instance.config.loki.host | string,
+            'LOKI_PORT': instance.config.loki.port | string,
+            'LOKI_URI': instance.config.loki.uri | default('/loki/api/v1/push'),
+            'LOKI_TLS': instance.config.loki.tls | default('Off') }) }}
+        wb_volumes:
+          - "{{ instance.config.docker_root | default('/var/lib/docker') }}/containers:/var/log/containers:ro"
+          - "{{ instance.config.storage_dir }}:/var/lib/fluent-bit"
+          - "/tmp/wb-{{ instance.name }}/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro"
+          - "/tmp/wb-{{ instance.name }}/parsers.conf:/fluent-bit/etc/parsers.conf:ro"

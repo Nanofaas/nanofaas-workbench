@@ -1,0 +1,22 @@
+---
+- name: Check the required config
+  ansible.builtin.assert:
+    that:
+      - collect_dir is defined
+    fail_msg: "instance {{ instance.name }}: collect needs collect_dir"
+    quiet: true
+
+- name: Take a TSDB snapshot
+  ansible.builtin.uri:
+    url: "http://{{ instance.config.bind | default('127.0.0.1') }}:{{ instance.config.port }}/api/v1/admin/tsdb/snapshot"
+    method: POST
+    return_content: true
+  register: prometheus_snapshot
+
+- name: Fetch the snapshot as a tarball
+  ansible.builtin.include_role:
+    name: nanofaas.workbench.common
+    tasks_from: fetch_dir_tarball
+  vars:
+    wb_src_dir: "{{ instance.config.data_dir }}/snapshots/{{ (prometheus_snapshot.content | from_json).data.name }}"
+    wb_archive: prometheus-snapshot.tar.gz

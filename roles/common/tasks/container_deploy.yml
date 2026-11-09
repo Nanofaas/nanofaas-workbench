@@ -1,7 +1,9 @@
 ---
 # Inputs: instance, wb_image, wb_port (waited on, at wb_host, default 127.0.0.1); optional wb_command,
 # wb_volumes, wb_ports (published), wb_network_mode (default: bridge),
-# wb_pid_mode, wb_restart (true restarts the container, e.g. after a mounted file changed).
+# wb_pid_mode, wb_restart (true restarts the container, e.g. after a mounted file changed),
+# wb_env (dict), wb_read_only, wb_cap_drop, wb_security_opts, wb_cpus, wb_memory,
+# wb_log_driver, wb_log_options.
 - name: Run the container
   community.docker.docker_container:
     name: "wb-{{ instance.name }}"
@@ -14,12 +16,30 @@
     ports: "{{ wb_ports | default(omit) }}"
     pid_mode: "{{ wb_pid_mode | default(omit) }}"
     volumes: "{{ wb_volumes | default(omit) }}"
+    env: "{{ wb_env | default(omit) }}"
+    read_only: "{{ wb_read_only | default(omit) }}"
+    cap_drop: "{{ wb_cap_drop | default(omit) }}"
+    security_opts: "{{ wb_security_opts | default(omit) }}"
+    cpus: "{{ wb_cpus | default(omit) }}"
+    memory: "{{ wb_memory | default(omit) }}"
+    log_driver: "{{ wb_log_driver | default(omit) }}"
+    log_options: "{{ wb_log_options | default(omit) }}"
     cpuset_cpus: "{{ instance.cpuset | default(omit) }}"
     labels:
       nanofaas.workbench/instance: "{{ instance.name }}"
       nanofaas.workbench/component: "{{ instance.component }}"
 
+# Docker Desktop's host network is its VM's, not the controller's: the port is not reachable from
+# here, so a host-network container is not waited on there (callers probe from inside the VM).
+- name: Ask the engine what it is
+  community.docker.docker_host_info:
+  register: common_engine
+  when: (wb_network_mode | default('')) == 'host'
+
 - name: Wait for the port
+  when: >-
+    (wb_network_mode | default('')) != 'host'
+    or common_engine.host_info.OperatingSystem != 'Docker Desktop'
   ansible.builtin.wait_for:
     host: "{{ wb_host | default('127.0.0.1') }}"
     port: "{{ wb_port }}"
