@@ -24,7 +24,8 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "supervisor/tests"]
+# Task 6 re-adds "supervisor/tests" and "supervisor" to testpaths and include.
+testpaths = ["tests"]
 markers = [
     "docker: needs a working Docker daemon",
     "kind: needs kind",
@@ -61,7 +62,7 @@ show_missing = true
 fail_under = 0  # raised when the supervisor lands
 
 [tool.basedpyright]
-include = ["tests", "supervisor"]
+include = ["tests"]
 typeCheckingMode = "standard"
 reportMissingTypeStubs = false
 reportPrivateUsage = false
