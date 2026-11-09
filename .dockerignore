@@ -1,0 +1,4 @@
+# Only the supervisor source goes into an image.
+*
+!supervisor/src
+**/__pycache__

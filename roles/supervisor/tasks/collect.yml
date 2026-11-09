@@ -1,0 +1,4 @@
+---
+# Nothing to collect: the client polls GET /status while the run lasts.
+- name: Nothing to collect
+  ansible.builtin.meta: noop

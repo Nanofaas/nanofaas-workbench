@@ -24,8 +24,9 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-# Task 6 re-adds "supervisor/tests" and "supervisor" to testpaths and include.
-testpaths = ["tests"]
+testpaths = ["tests", "supervisor/tests"]
+# The supervisor is not a package: its source is imported from the tree.
+pythonpath = ["supervisor/src"]
 markers = [
     "docker: needs a working Docker daemon",
     "kind: needs kind",
@@ -45,7 +46,7 @@ select = [
 ignore = ["D203", "D213", "PT018"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["supervisor"]
+known-first-party = ["workbench_supervisor"]
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**/*.py" = [
@@ -55,14 +56,15 @@ known-first-party = ["supervisor"]
 
 [tool.coverage.run]
 branch = true
-source = ["supervisor"]
+source = ["workbench_supervisor"]
 
 [tool.coverage.report]
 show_missing = true
-fail_under = 0  # raised when the supervisor lands
+fail_under = 90
 
 [tool.basedpyright]
-include = ["tests"]
+include = ["tests", "supervisor"]
+extraPaths = ["supervisor/src"]
 typeCheckingMode = "standard"
 reportMissingTypeStubs = false
 reportPrivateUsage = false

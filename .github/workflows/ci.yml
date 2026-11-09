@@ -33,4 +33,7 @@ jobs:
           print(yaml.safe_dump({"collections": [{"name": n, "version": v} for n, v in deps.items()]}))
           PY
           uv run --locked ansible-galaxy collection install -r /tmp/requirements.yml
-      - run: uv run --locked pytest -q
+      - name: Build the supervisor image (not pushed)
+        run: docker build -f images/supervisor/Dockerfile -t workbench-supervisor:ci .
+      # --cov applies fail_under from [tool.coverage.report] to the supervisor.
+      - run: uv run --locked pytest -q --cov

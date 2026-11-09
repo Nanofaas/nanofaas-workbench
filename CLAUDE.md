@@ -17,6 +17,7 @@ group; a system Ansible may be another version).
 
 ```bash
 uv run pytest -q                       # docker/kind tests skip without the tool
+uv run pytest -q --cov                 # as CI: supervisor coverage >= fail_under
 uv run ruff check . && uv run ruff format --check .
 uv run basedpyright
 uv run ansible-lint

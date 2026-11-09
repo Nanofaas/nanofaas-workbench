@@ -1,0 +1,7 @@
+---
+- name: Remove the container
+  ansible.builtin.include_role:
+    name: nanofaas.workbench.common
+    tasks_from: container_undeploy
+  vars:
+    wb_graceful: true
