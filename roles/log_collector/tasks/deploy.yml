@@ -56,11 +56,14 @@
   when: (instance.form | default('container')) == 'container'
   block:
 
-    - name: Create the storage dir
-      ansible.builtin.file:
-        path: "{{ instance.config.storage_dir }}"
-        state: directory
-        mode: "0777"
+    # 0777 when created here; an existing dir keeps its mode (README: what the caller ensures).
+    - name: Create the storage dir when missing
+      ansible.builtin.include_role:
+        name: nanofaas.workbench.common
+        tasks_from: ensure_dir
+      vars:
+        wb_dir: "{{ instance.config.storage_dir }}"
+        wb_mode: "0777"
 
     - name: Run the log collector
       ansible.builtin.include_role:

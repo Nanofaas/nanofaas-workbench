@@ -19,19 +19,19 @@
     dest: "/tmp/wb-{{ instance.name }}/scripts/{{ instance.config.script }}"
     mode: "0644"
 
-- name: Create the output dir
-  ansible.builtin.file:
-    path: "{{ instance.config.output_dir }}"
-    state: directory
-    mode: "0755"
+- name: Create the output dir when missing
+  ansible.builtin.include_role:
+    name: nanofaas.workbench.common
+    tasks_from: ensure_dir
+  vars:
+    wb_dir: "{{ instance.config.output_dir }}"
+    wb_mode: "0755"
 
 # k6 runs as the invoking user by default so its output files belong to the caller.
 - name: Look up the remote user's uid and gid
-  ansible.builtin.command:
-    argv: [id, "{{ item }}"]
-  loop: ["-u", "-g"]
-  register: loadgen_ids
-  changed_when: false
+  ansible.builtin.include_role:
+    name: nanofaas.workbench.common
+    tasks_from: caller_ids
   when: instance.config.user is not defined
 
 - name: Work out the command line
@@ -41,20 +41,34 @@
       /scripts/{{ instance.config.script }} 2>/out/generator.stderr
     loadgen_user: >-
       {{ instance.config.user if instance.config.user is defined
-         else loadgen_ids.results[0].stdout ~ ':' ~ loadgen_ids.results[1].stdout }}
+         else common_caller_ids }}
     # An arbitrary uid has no home in the image.
     loadgen_env: "{{ {'HOME': '/tmp'} | combine(instance.config.env | default({})) }}"
 
+# One meaning in both forms: a job still running is left alone, one that already finished
+# is refused (rerunning it would duplicate load and evidence), only a missing one starts.
 - name: Run k6 (pod form)
   when: (instance.form | default('container')) == 'pod'
   block:
-    # A Job's spec cannot be upgraded: a repeat run starts from a fresh release.
-    - name: Remove the previous release
-      ansible.builtin.include_role:
-        name: nanofaas.workbench.common
-        tasks_from: pod_undeploy
+    - name: Read the Job's status
+      ansible.builtin.command:
+        argv: >-
+          {{ ['kubectl'] + (['--kubeconfig', instance.config.kubeconfig] if instance.config.kubeconfig is defined else [])
+             + ['-n', instance.config.namespace | default('default'), 'get', 'job', 'wb-' ~ instance.name,
+                '--ignore-not-found', '-o', 'jsonpath={.status.active}/{.status.succeeded}/{.status.failed}'] }}
+      register: loadgen_job_prior
+      changed_when: false
+
+    - name: Refuse a Job that already ran
+      ansible.builtin.fail:
+        msg: "loadgen {{ instance.name }} already ran; undeploy it first"
+      when: >-
+        loadgen_job_prior.stdout | trim != '' and
+        (loadgen_job_prior.stdout.split('/')[1] | default('') not in ['', '0']
+         or loadgen_job_prior.stdout.split('/')[2] | default('') not in ['', '0'])
 
     - name: Install the Job
+      when: loadgen_job_prior.stdout | trim == ''
       ansible.builtin.include_role:
         name: nanofaas.workbench.common
         tasks_from: pod_deploy
@@ -73,6 +87,7 @@
           user: "{{ loadgen_user }}"
 
     - name: Wait for the job to have started
+      when: loadgen_job_prior.stdout | trim == ''
       ansible.builtin.command:
         argv: >-
           {{ ['kubectl'] + (['--kubeconfig', instance.config.kubeconfig] if instance.config.kubeconfig is defined else [])
@@ -85,6 +100,7 @@
       changed_when: false
 
     - name: Fail fast when k6 failed
+      when: loadgen_job_prior.stdout | trim == ''
       ansible.builtin.assert:
         that: loadgen_job.stdout.split('/')[2] == ''
         fail_msg: "instance {{ instance.name }}: the k6 Job failed; see generator.stderr in output_dir"
@@ -93,7 +109,20 @@
 - name: Run k6 (container form)
   when: (instance.form | default('container')) == 'container'
   block:
+    - name: Look the container up
+      community.docker.docker_container_info:
+        name: "wb-{{ instance.name }}"
+      register: loadgen_container_prior
+
+    - name: Refuse a job that already ran
+      ansible.builtin.fail:
+        msg: "loadgen {{ instance.name }} already ran; undeploy it first"
+      when:
+        - loadgen_container_prior.exists
+        - not loadgen_container_prior.container.State.Running
+
     - name: Start k6
+      when: not loadgen_container_prior.exists
       ansible.builtin.include_role:
         name: nanofaas.workbench.common
         tasks_from: container_deploy
@@ -115,6 +144,7 @@
 
     # A job has no port: it counts as started when it runs or has already exited 0.
     - name: Wait for the job to have started
+      when: not loadgen_container_prior.exists
       community.docker.docker_container_info:
         name: "wb-{{ instance.name }}"
       register: loadgen_state
@@ -125,6 +155,7 @@
       delay: 1
 
     - name: Fail fast when k6 exited non-zero
+      when: not loadgen_container_prior.exists
       ansible.builtin.assert:
         that: loadgen_state.container.State.ExitCode == 0
         fail_msg: "instance {{ instance.name }}: k6 exited {{ loadgen_state.container.State.ExitCode }}; see generator.stderr in output_dir"

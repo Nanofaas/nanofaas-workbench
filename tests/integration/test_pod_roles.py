@@ -31,12 +31,17 @@ case "$1" in
         /*) [ -f "$a/Chart.yaml" ] && echo "$a" > {tmp_path}/chart.log;;
       esac
     done
+    echo '1//' > {tmp_path}/job.state
     echo '{{"info":{{"status":"deployed"}}}}';;
   *) echo '{{}}';;
 esac
 """
     )
     script.chmod(0o755)
+    # kubectl get job: active/succeeded/failed from job.state; nothing = no Job.
+    kubectl = bindir / "kubectl"
+    kubectl.write_text(f"#!/bin/sh\ncat {tmp_path}/job.state 2>/dev/null\nexit 0\n")
+    kubectl.chmod(0o755)
     return {"PATH": f"{bindir}{os.pathsep}{os.environ['PATH']}"}, tmp_path
 
 
@@ -125,3 +130,65 @@ def test_pod_form_needs_a_node_name(run_playbook, component):
     done = run_playbook("deploy", vs)
     assert done.returncode != 0
     assert "needs config.node_name" in done.stdout + done.stderr
+
+
+def lg_vars(name: str, out: Path) -> dict:
+    return {
+        "instances": [
+            {"name": name, "component": "loadgen", "form": "pod",
+             "config": {"script": "one-shot.js", "output_dir": str(out)}}
+        ]
+    }  # fmt: skip
+
+
+def test_loadgen_pod_starts_only_when_missing(run_playbook, stub_helm, remote):
+    env, tmp = stub_helm
+    out = tmp / "out"
+    out.mkdir(mode=0o750)
+    out.chmod(0o750)
+    vs = lg_vars("lgpod", out)
+    try:
+        done = run_playbook("deploy", vs, inventory=remote, **env)
+        assert done.returncode == 0, done.stdout + done.stderr
+        assert (tmp / "values.yaml").exists()
+        # The caller's existing output dir keeps its mode.
+        assert out.stat().st_mode & 0o777 == 0o750
+        # Still running: a repeat deploy is a no-op (helm is not called again).
+        (tmp / "values.yaml").unlink()
+        done = run_playbook("deploy", vs, inventory=remote, **env)
+        assert done.returncode == 0, done.stdout + done.stderr
+        assert not (tmp / "values.yaml").exists()
+        # Finished (succeeded or failed): a repeat deploy fails, nothing reruns.
+        for state in ("0/1/", "0//1"):
+            (tmp / "job.state").write_text(state)
+            done = run_playbook("deploy", vs, inventory=remote, **env)
+            assert done.returncode != 0
+            assert "loadgen lgpod already ran; undeploy it first" in done.stdout
+            assert not (tmp / "values.yaml").exists()
+    finally:
+        gone = run_playbook("undeploy", vs, inventory=remote, **env)
+    assert gone.returncode == 0, gone.stdout + gone.stderr
+    assert not Path("/tmp/wb-lgpod").exists()
+
+
+@pytest.mark.parametrize(
+    ("component", "config"),
+    [
+        ("node-exporter", {"node_name": "n"}),
+        ("cadvisor", {"node_name": "n"}),
+        ("supervisor", {"port": 8099, "prometheus_url": "http://127.0.0.1:9090"}),
+    ],
+)
+def test_pod_undeploy_leaves_no_scratch_dir(
+    run_playbook, stub_helm, remote, component, config
+):
+    env, _ = stub_helm
+    name = f"scratch-{component}"
+    vs = {"instances": [{"name": name, "component": component, "form": "pod",
+                         "config": config}]}  # fmt: skip
+    done = run_playbook("deploy", vs, inventory=remote, **env)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert Path(f"/tmp/wb-{name}").exists()
+    gone = run_playbook("undeploy", vs, inventory=remote, **env)
+    assert gone.returncode == 0, gone.stdout + gone.stderr
+    assert not Path(f"/tmp/wb-{name}").exists()

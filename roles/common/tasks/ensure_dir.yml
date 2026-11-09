@@ -1,0 +1,14 @@
+---
+# Inputs: wb_dir, wb_mode. Creates wb_dir with wb_mode only when it is missing: a directory
+# the caller already has keeps its owner and mode (the caller then makes it usable).
+- name: Look the directory up
+  ansible.builtin.stat:
+    path: "{{ wb_dir }}"
+  register: common_dir
+
+- name: Create it when missing
+  ansible.builtin.file:
+    path: "{{ wb_dir }}"
+    state: directory
+    mode: "{{ wb_mode }}"
+  when: not common_dir.stat.exists

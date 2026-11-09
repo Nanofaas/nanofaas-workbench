@@ -8,7 +8,8 @@
     state: absent
     wait: true
 
-- name: Remove the chart copy
+# The chart copy and any rendered config files: pod_deploy's scratch dir.
+- name: Remove the scratch dir
   ansible.builtin.file:
-    path: "/tmp/wb-{{ instance.name }}/chart"
+    path: "/tmp/wb-{{ instance.name }}"
     state: absent

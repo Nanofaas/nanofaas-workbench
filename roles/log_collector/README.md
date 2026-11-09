@@ -8,7 +8,7 @@ fluent-bit shipping container logs to Loki. Container form: **host network**; re
 | `port` | required | fluent-bit HTTP port (the config files set it); readiness and `collect` |
 | `config_files` | required | `{fluent-bit.conf: <path>, parsers.conf: <path>}` on the controller; the role ships none (use nanoFaaS' `deploy/observability`) |
 | `loki` | required | `{host, port, uri, tls}` -> `LOKI_HOST`, `LOKI_PORT`, `LOKI_URI` (default `/loki/api/v1/push`), `LOKI_TLS` (`On`/`Off`, default `Off`) |
-| `storage_dir` | required | host path mounted at `/var/lib/fluent-bit` (created 0777) |
+| `storage_dir` | required | host path mounted at `/var/lib/fluent-bit` (created 0777 when missing; an existing dir keeps its mode, so the caller makes it writable by the container's root) |
 | `docker_root` | `/var/lib/docker` | its `containers` dir is mounted ro at `/var/log/containers` |
 | `cpus`, `memory_mib` | unset | container limits |
 | `env` | `{}` | extra environment (e.g. the `NANOFAAS_*` values the nanoFaaS config reads) |

@@ -48,12 +48,14 @@
   when: (instance.form | default('container')) == 'container'
   block:
 
-    # ponytail: 0777 because Prometheus runs as nobody; the caller still owns the path.
-    - name: Create the data dir
-      ansible.builtin.file:
-        path: "{{ instance.config.data_dir }}"
-        state: directory
-        mode: "0777"
+    # ponytail: 0777 because Prometheus runs as nobody; created only when missing, so the caller still owns the path.
+    - name: Create the data dir when missing
+      ansible.builtin.include_role:
+        name: nanofaas.workbench.common
+        tasks_from: ensure_dir
+      vars:
+        wb_dir: "{{ instance.config.data_dir }}"
+        wb_mode: "0777"
 
     - name: Run Prometheus
       ansible.builtin.include_role:

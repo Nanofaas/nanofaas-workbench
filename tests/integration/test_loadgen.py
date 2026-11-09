@@ -119,3 +119,37 @@ def test_undeploy_stops_a_running_generator(run_playbook, tmp_path, echo):
     assert done.returncode == 0, done.stdout + done.stderr
     assert time.monotonic() - started < 15
     assert docker("ps", "-aq", "--filter", f"name={container}").stdout.strip() == ""
+
+
+@pytest.mark.docker
+def test_redeploy_of_a_running_job_is_a_noop(run_playbook, tmp_path, echo):
+    vs, _, container = loadgen_vars(tmp_path, echo, 200, duration="5m")
+    started = "{{.State.StartedAt}}"
+    try:
+        assert run_playbook("deploy", vs).returncode == 0
+        assert wait_state(container, "running", 10).startswith("running")
+        first = docker("inspect", container, "--format", started).stdout
+        done = run_playbook("deploy", vs)
+        assert done.returncode == 0, done.stdout + done.stderr
+        assert docker("inspect", container, "--format", started).stdout == first
+        assert wait_state(container, "running", 1).startswith("running")
+    finally:
+        run_playbook("undeploy", vs)
+
+
+@pytest.mark.docker
+def test_redeploy_of_a_finished_job_fails(run_playbook, tmp_path, echo):
+    vs, out, container = loadgen_vars(tmp_path, echo, 1)
+    try:
+        assert run_playbook("deploy", vs).returncode == 0
+        assert wait_state(container, "exited") == "exited 0"
+        before = (out / "generator.jsonl").read_text()
+        done = run_playbook("deploy", vs)
+        assert done.returncode != 0
+        name = vs["instances"][0]["name"]
+        assert f"loadgen {name} already ran; undeploy it first" in done.stdout
+        # k6 did not run again.
+        assert wait_state(container, "exited") == "exited 0"
+        assert (out / "generator.jsonl").read_text() == before
+    finally:
+        run_playbook("undeploy", vs)

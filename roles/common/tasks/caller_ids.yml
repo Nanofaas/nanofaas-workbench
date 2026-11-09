@@ -1,0 +1,15 @@
+---
+# Sets common_caller_ids to the connection user's "uid:gid" on the target.
+- name: Look up the connection user's uid and gid
+  ansible.builtin.command:
+    argv: [id, "{{ common_id_flag }}"]
+  loop: ["-u", "-g"]
+  # Not `item`: the caller's `instance` is `{{ item }}` and would be re-read through it.
+  loop_control:
+    loop_var: common_id_flag
+  register: common_ids
+  changed_when: false
+
+- name: Remember them
+  ansible.builtin.set_fact:
+    common_caller_ids: "{{ common_ids.results | map(attribute='stdout') | join(':') }}"

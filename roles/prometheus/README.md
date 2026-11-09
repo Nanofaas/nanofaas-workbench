@@ -1,13 +1,13 @@
 # prometheus (component `prometheus`)
 
 Resource metrics store. Container form: **host network** (targets include the caller's loopback
-tunnels), listening on `<bind>:<port>` via `--web.listen-address`; admin API enabled.
+tunnels), listening on `<bind>:<port>` via `--web.listen-address`; admin API enabled (`--web.enable-admin-api`, always: `collect` needs its snapshot endpoint). **The admin API can delete series and wipe the TSDB with no authentication**; with `bind: 0.0.0.0` anyone who reaches the port can. Keep the default `127.0.0.1` unless the network is trusted.
 
 | `config` key | Default | |
 | --- | --- | --- |
 | `port` | required | readiness and API port |
 | `bind` | `127.0.0.1` | |
-| `data_dir` | required | host path mounted at `/prometheus` (created 0777: Prometheus runs as nobody) |
+| `data_dir` | required | host path mounted at `/prometheus` (created 0777 when missing: Prometheus runs as nobody; an existing dir keeps its mode, so the caller makes it writable by uid 65534) |
 | `scrape_interval` | `5s` | |
 | `retention` | `7d` | |
 | `jobs` | `{}` | `{<job>: [{target: "host:port", labels: {…}}]}`; every job has `honor_timestamps: false`; an empty list is valid |

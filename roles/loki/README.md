@@ -7,7 +7,7 @@ Log store. Container form: default bridge network, port published as `<bind>:<po
 | --- | --- | --- |
 | `port` | required | published host port; readiness is GET `/ready` |
 | `bind` | `127.0.0.1` | |
-| `data_dir` | required | host path mounted at `/loki`; the caller owns the raw archive. Created with mode 0777 (Loki runs as uid 10001) |
+| `data_dir` | required | host path mounted at `/loki`; the caller owns the raw archive. Created with mode 0777 when missing (Loki runs as uid 10001); an existing dir keeps its mode, so the caller makes it writable by uid 10001 |
 | `config_file` | bundled `files/loki.yaml` | controller path to a Loki config in the container layout |
 
 The bundled file is a verbatim copy of nanoFaaS `deploy/observability/loki.yaml` at `401391a0`.
