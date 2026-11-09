@@ -23,7 +23,7 @@ def stub_api(free_port):
         def do_POST(self):
             self._send(b'{"status":"success","data":{"name":"snap1"}}')
 
-        def log_message(self, format, *args):  # noqa: A002
+        def log_message(self, format, *args):
             pass
 
     server = http.server.HTTPServer(("127.0.0.1", free_port), Handler)
@@ -67,7 +67,10 @@ def test_log_collector_collect_stores_metrics_and_storage(
                        "config": {"port": stub_api, "storage_dir": str(storage),
                                   "config_files": {}, "loki": {}}}],
     }  # fmt: skip
-    for inventory, has_tar in (("localhost,", False), (remote_inventory(tmp_path), True)):
+    for inventory, has_tar in (
+        ("localhost,", False),
+        (remote_inventory(tmp_path), True),
+    ):
         done = run_playbook("collect", vs, inventory=inventory)
         assert done.returncode == 0, done.stdout + done.stderr
         out = tmp_path / "out" / "lc"

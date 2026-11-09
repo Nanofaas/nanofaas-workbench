@@ -19,7 +19,9 @@ def docker(*args: str) -> subprocess.CompletedProcess:
     )
 
 
-def test_log_collector_ships_to_loki(run_playbook, free_port, tmp_path):
+@pytest.fixture
+def deployed(run_playbook, free_port, tmp_path):
+    """Loki plus the log collector, deployed; torn down afterwards."""
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         fb_port = s.getsockname()[1]
@@ -50,51 +52,68 @@ def test_log_collector_ships_to_loki(run_playbook, free_port, tmp_path):
     try:
         done = run_playbook("deploy", vs)
         assert done.returncode == 0, done.stdout + done.stderr
-        info = json.loads(docker("inspect", "wb-lc").stdout)[0]
-        host = info["HostConfig"]
-        assert host["NetworkMode"] == "host"
-        assert host["ReadonlyRootfs"] is True
-        assert host["CapDrop"] == ["ALL"]
-        assert "no-new-privileges" in host["SecurityOpt"]
-        assert host["NanoCpus"] == 500_000_000
-        assert host["Memory"] == 128 * 1024 * 1024
-        assert host["LogConfig"] == {
-            "Type": "local", "Config": {"max-size": "10m", "max-file": "2"}
-        }
-        env = info["Config"]["Env"]
-        assert {"LOKI_HOST=127.0.0.1", "LOKI_TLS=Off", "LOKI_URI=/loki/api/v1/push"} <= set(env)
-        assert f"LOKI_PORT={free_port}" in env
-
-        (root / "containers" / "app.log").write_text("hello-from-wb\n")
-        used = shutil.disk_usage(tmp_path)
-        shipped = False
-        if used.used / used.total < 0.9:
-            now = time.time_ns()
-            url = (
-                f"http://127.0.0.1:{free_port}/loki/api/v1/query_range"
-                f"?query=%7Bjob%3D%22wbtest%22%7D&start={now - 600 * 10**9}"
-                f"&end={now + 60 * 10**9}"
-            )
-            for _ in range(30):
-                try:
-                    if "hello-from-wb" in urllib.request.urlopen(url, timeout=5).read().decode():
-                        shipped = True
-                        break
-                except OSError:
-                    pass
-                time.sleep(1)
-            assert shipped, "line never reached Loki"
-
-        if docker("info", "--format", "{{.OperatingSystem}}").stdout.strip() == (
-            "Docker Desktop"
-        ):
-            pytest.skip("Docker Desktop: host network not reachable, collect needs Linux")
-        done = run_playbook("collect", vs)
-        assert done.returncode == 0, done.stdout + done.stderr
-        out = tmp_path / "out" / "lc"
-        assert "fluentbit_input_records_total" in (out / "metrics.txt").read_text()
-        if used.used / used.total >= 0.9:
-            pytest.skip("host disk over 90%: Loki refuses writes; config/metrics verified")
+        yield vs, fb_port, free_port, root
     finally:
         run_playbook("undeploy", vs)
-        assert not Path("/tmp/wb-lc").exists()
+
+
+def test_collector_is_hardened_and_running(deployed, host_get):
+    _, fb_port, loki_port, _ = deployed
+    info = json.loads(docker("inspect", "wb-lc").stdout)[0]
+    assert info["State"]["Running"] is True
+    host = info["HostConfig"]
+    assert host["NetworkMode"] == "host"
+    assert host["ReadonlyRootfs"] is True
+    assert host["CapDrop"] == ["ALL"]
+    assert "no-new-privileges" in host["SecurityOpt"]
+    assert host["NanoCpus"] == 500_000_000
+    assert host["Memory"] == 128 * 1024 * 1024
+    assert host["LogConfig"] == {
+        "Type": "local",
+        "Config": {"max-size": "10m", "max-file": "2"},
+    }
+    env = info["Config"]["Env"]
+    assert {"LOKI_HOST=127.0.0.1", "LOKI_TLS=Off", "LOKI_URI=/loki/api/v1/push"} <= set(
+        env
+    )
+    assert f"LOKI_PORT={loki_port}" in env
+    # fluent-bit really started and serves its metrics
+    metrics = host_get(f"http://127.0.0.1:{fb_port}/api/v2/metrics/prometheus")
+    assert "fluentbit_input_records_total" in metrics
+
+
+def test_log_line_reaches_loki(deployed):
+    _, _, loki_port, root = deployed
+    used = shutil.disk_usage(root)
+    if used.used / used.total >= 0.9:
+        pytest.skip("host disk over 90%: Loki refuses writes")
+    (root / "containers" / "app.log").write_text("hello-from-wb\n")
+    now = time.time_ns()
+    url = (
+        f"http://127.0.0.1:{loki_port}/loki/api/v1/query_range"
+        f"?query=%7Bjob%3D%22wbtest%22%7D&start={now - 600 * 10**9}"
+        f"&end={now + 60 * 10**9}"
+    )
+    for _ in range(30):
+        try:
+            if (
+                "hello-from-wb"
+                in urllib.request.urlopen(url, timeout=5).read().decode()
+            ):
+                return
+        except OSError:
+            pass
+        time.sleep(1)
+    pytest.fail("line never reached Loki")
+
+
+def test_collect_stores_metrics(deployed, run_playbook, tmp_path):
+    vs = deployed[0]
+    if docker("info", "--format", "{{.OperatingSystem}}").stdout.strip() == (
+        "Docker Desktop"
+    ):
+        pytest.skip("Docker Desktop: host network not reachable, collect needs Linux")
+    done = run_playbook("collect", vs)
+    assert done.returncode == 0, done.stdout + done.stderr
+    metrics = (tmp_path / "out" / "lc" / "metrics.txt").read_text()
+    assert "fluentbit_input_records_total" in metrics

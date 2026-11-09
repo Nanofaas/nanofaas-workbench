@@ -30,16 +30,36 @@
       nanofaas.workbench/component: "{{ instance.component }}"
 
 # Docker Desktop's host network is its VM's, not the controller's: the port is not reachable from
-# here, so a host-network container is not waited on there (callers probe from inside the VM).
-- name: Ask the engine what it is
-  community.docker.docker_host_info:
-  register: common_engine
-  when: (wb_network_mode | default('')) == 'host'
+# here, so there it is probed from a throwaway host-network container instead.
+- name: Ask the engine what it is, once
+  when:
+    - (wb_network_mode | default('')) == 'host'
+    - common_desktop is not defined
+  block:
+    - name: Read the engine info
+      community.docker.docker_host_info:
+      register: common_engine
+
+    - name: Remember it
+      ansible.builtin.set_fact:
+        common_desktop: "{{ common_engine.host_info.OperatingSystem == 'Docker Desktop' }}"
+        cacheable: true
+
+- name: Probe the port from inside the Docker VM
+  when:
+    - (wb_network_mode | default('')) == 'host'
+    - common_desktop | default(false)
+  ansible.builtin.command:
+    argv: [docker, run, --rm, --network, host, "{{ common_probe_image }}", nc, -z,
+           "{{ wb_host | default('127.0.0.1') }}", "{{ wb_port }}"]
+  register: common_probe
+  until: common_probe.rc == 0
+  retries: 30
+  delay: 2
+  changed_when: false
 
 - name: Wait for the port
-  when: >-
-    (wb_network_mode | default('')) != 'host'
-    or common_engine.host_info.OperatingSystem != 'Docker Desktop'
+  when: (wb_network_mode | default('')) != 'host' or not (common_desktop | default(false))
   ansible.builtin.wait_for:
     host: "{{ wb_host | default('127.0.0.1') }}"
     port: "{{ wb_port }}"

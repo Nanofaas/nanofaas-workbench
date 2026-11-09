@@ -22,15 +22,6 @@ def docker(*args: str) -> subprocess.CompletedProcess:
     )
 
 
-def host_get(url: str) -> str:
-    """GET from inside the Docker host's network: Docker Desktop's host net is a VM."""
-    done = docker(
-        "run", "--rm", "--network", "host", "--entrypoint", "wget", IMAGE,
-        "-qO-", url,
-    )  # fmt: skip
-    return done.stdout
-
-
 def host_net_unreachable() -> bool:
     """Docker Desktop's host network is its VM's: collect cannot reach the API."""
     return docker("info", "--format", "{{.OperatingSystem}}").stdout.strip() == (
@@ -81,7 +72,7 @@ def test_scrape_time_not_honored(run_playbook, free_port, tmp_path):
         run_playbook("undeploy", vs)
 
 
-def test_scrape_and_snapshot(run_playbook, free_port, tmp_path):
+def test_scrape_and_snapshot(run_playbook, free_port, tmp_path, host_get):
     ne_port = free_port
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
@@ -104,8 +95,16 @@ def test_scrape_and_snapshot(run_playbook, free_port, tmp_path):
             time.sleep(1)
         else:
             pytest.fail(f"up != 1: {host_get(query)}")
+        snap = json.loads(
+            host_get(
+                f"http://127.0.0.1:{pr_port}/api/v1/admin/tsdb/snapshot", post=True
+            )
+        )["data"]["name"]
+        assert (tmp_path / "d" / "snapshots" / snap).is_dir()
         if host_net_unreachable():
-            pytest.skip("Docker Desktop: host network not reachable, collect needs Linux")
+            pytest.skip(
+                "Docker Desktop: host network not reachable, collect needs Linux"
+            )
         done = run_playbook("collect", vs)
         assert done.returncode == 0, done.stdout + done.stderr
         tarball = tmp_path / "out" / "pr" / "prometheus-snapshot.tar.gz"

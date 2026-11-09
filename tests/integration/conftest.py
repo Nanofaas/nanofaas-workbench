@@ -82,3 +82,22 @@ def run_playbook(tool, collections_path, galaxy_deps, tmp_path):
         )  # fmt: skip
 
     return go
+
+
+@pytest.fixture
+def host_get():
+    """GET/POST from inside the Docker host's network (Docker Desktop's is a VM)."""
+    image = yaml.safe_load((ROOT / "roles/common/defaults/main.yml").read_text())[
+        "common_probe_image"
+    ]
+
+    def go(url: str, post: bool = False) -> str:
+        args = ["--post-data="] if post else []
+        done = subprocess.run(
+            ["docker", "run", "--rm", "--network", "host", image,
+             "wget", "-qO-", *args, url],
+            capture_output=True, text=True, check=False,
+        )  # fmt: skip
+        return done.stdout
+
+    return go
