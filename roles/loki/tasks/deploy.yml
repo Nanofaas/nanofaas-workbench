@@ -1,9 +1,17 @@
 ---
-- name: Check the container form
+- name: Fail on the pod form until it is implemented
   ansible.builtin.include_role:
     name: nanofaas.workbench.common
     tasks_from: pod_unsupported
   when: (instance.form | default('container')) == 'pod'
+
+- name: Check the required config
+  ansible.builtin.assert:
+    that:
+      - instance.config.port is defined
+      - instance.config.data_dir is defined
+    fail_msg: "instance {{ instance.name }}: loki needs config.port and config.data_dir"
+    quiet: true
 
 - name: Run Loki (container form)
   when: (instance.form | default('container')) == 'container'
@@ -15,6 +23,7 @@
         mode: "0755"
 
     - name: Place the config file
+      register: loki_config
       ansible.builtin.copy:
         src: "{{ instance.config.config_file | default('loki.yaml') }}"
         dest: "/tmp/wb-{{ instance.name }}/loki.yaml"
@@ -35,6 +44,8 @@
         wb_image: "{{ loki_image }}"
         wb_port: "{{ instance.config.port }}"
         wb_host: "{{ instance.config.bind | default('127.0.0.1') }}"
+        # A replaced file is a new inode under the single-file bind mount: restart to pick it up.
+        wb_restart: "{{ loki_config.changed }}"
         wb_ports:
           - "{{ instance.config.bind | default('127.0.0.1') }}:{{ instance.config.port }}:3100"
         wb_command:

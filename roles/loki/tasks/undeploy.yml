@@ -3,3 +3,8 @@
   ansible.builtin.include_role:
     name: nanofaas.workbench.common
     tasks_from: container_undeploy
+
+- name: Remove the config copy
+  ansible.builtin.file:
+    path: "/tmp/wb-{{ instance.name }}"
+    state: absent

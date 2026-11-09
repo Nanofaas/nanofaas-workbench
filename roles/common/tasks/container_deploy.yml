@@ -1,13 +1,14 @@
 ---
 # Inputs: instance, wb_image, wb_port (waited on, at wb_host, default 127.0.0.1); optional wb_command,
 # wb_volumes, wb_ports (published), wb_network_mode (default: bridge),
-# wb_pid_mode.
+# wb_pid_mode, wb_restart (true restarts the container, e.g. after a mounted file changed).
 - name: Run the container
   community.docker.docker_container:
     name: "wb-{{ instance.name }}"
     image: "{{ wb_image }}"
     command: "{{ wb_command | default(omit) }}"
     state: started
+    restart: "{{ wb_restart | default(false) }}"
     restart_policy: unless-stopped
     network_mode: "{{ wb_network_mode | default(omit) }}"
     ports: "{{ wb_ports | default(omit) }}"

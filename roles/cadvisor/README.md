@@ -13,3 +13,8 @@ Runs with `--docker_only=true --store_container_labels=true`, so Docker labels a
 | `housekeeping_interval` | `5s` | |
 
 The image is pinned by digest in `defaults/main.yml` (`cadvisor_image`). Pod form: not implemented yet.
+
+Mounts, all read-only, and why: `/` at `/rootfs` (filesystem and disk stats), `/sys` and `/sys/fs/cgroup`
+(cgroup counters), `/var/lib/docker` (container layer sizes), the single file `/var/run/docker.sock`
+(container names and labels; the whole `/var/run` is not needed), and `/run/containerd` (Docker's
+containerd image store; without it the docker factory is not registered). `/proc` is not needed.

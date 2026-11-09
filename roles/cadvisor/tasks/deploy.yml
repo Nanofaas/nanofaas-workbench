@@ -14,6 +14,7 @@
       - --store_container_labels=true
       - "--housekeeping_interval={{ instance.config.housekeeping_interval | default('5s') }}"
     wb_volumes:
+      - /:/rootfs:ro
       - /sys:/sys:ro
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
       - /var/lib/docker:/var/lib/docker:ro
