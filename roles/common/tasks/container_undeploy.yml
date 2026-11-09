@@ -11,4 +11,4 @@
     force_kill: true
   when:
     - common_found.exists
-    - common_found.container.Config.Labels['nanofaas.workbench/instance'] | default('') == instance.name
+    - (common_found.container.Config.Labels | default({})).get('nanofaas.workbench/instance', '') == instance.name

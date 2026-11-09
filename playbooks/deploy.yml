@@ -1,21 +1,16 @@
 ---
-- name: Workbench deploy
-  hosts: all
-  gather_facts: false
-  vars_files:
-    - vars/connection.yml
-    - "{{ workbench_vars }}"
-  tasks:
-    - name: Validate the host vars file
-      ansible.builtin.import_tasks: tasks/validate_vars.yml
+# This machine runs in place, with the interpreter that has the Docker SDK;
+# every other host keeps whatever its inventory sets.
+- name: Workbench deploy on this machine
+  ansible.builtin.import_playbook: run.yml
+  vars:
+    wb_action: deploy
+    wb_hosts: "all:&localhost:&127.0.0.1"
+    ansible_connection: local
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
 
-    - name: Run deploy for each instance
-      # Ansible role names cannot hold a hyphen: component node-exporter is role node_exporter.
-      ansible.builtin.include_role:
-        name: "nanofaas.workbench.{{ item.component | replace('-', '_') }}"
-        tasks_from: deploy
-      vars:
-        instance: "{{ item }}"
-      loop: "{{ instances }}"
-      loop_control:
-        label: "{{ item.name }}"
+- name: Workbench deploy on other hosts
+  ansible.builtin.import_playbook: run.yml
+  vars:
+    wb_action: deploy
+    wb_hosts: "all:!localhost:!127.0.0.1"

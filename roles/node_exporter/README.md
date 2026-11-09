@@ -1,7 +1,7 @@
 # node_exporter (component `node-exporter`)
 
-Host metrics. Container form: host network and PID namespace, `/` mounted
-read-only at `/host`.
+Host metrics. Container form: default bridge network with the port published; host `/proc` and `/sys` mounted
+read-only at `/host/proc` and `/host/sys`.
 
 | `config` key | Default | |
 | --- | --- | --- |

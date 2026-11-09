@@ -1,4 +1,7 @@
 ---
+# Inputs: instance, wb_image, wb_port (waited on); optional wb_command,
+# wb_volumes, wb_ports (published), wb_network_mode (default: bridge),
+# wb_pid_mode.
 - name: Run the container
   community.docker.docker_container:
     name: "wb-{{ instance.name }}"
@@ -6,7 +9,8 @@
     command: "{{ wb_command | default(omit) }}"
     state: started
     restart_policy: unless-stopped
-    network_mode: "{{ wb_network_mode | default('host') }}"
+    network_mode: "{{ wb_network_mode | default(omit) }}"
+    ports: "{{ wb_ports | default(omit) }}"
     pid_mode: "{{ wb_pid_mode | default(omit) }}"
     volumes: "{{ wb_volumes | default(omit) }}"
     cpuset_cpus: "{{ instance.cpuset | default(omit) }}"

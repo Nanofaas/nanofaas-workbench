@@ -3,12 +3,10 @@
 import json
 import socket
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
 import yaml
-
 
 ROOT = Path(__file__).resolve().parents[2]
 DEPS_CACHE = ROOT / ".ansible" / "collections"  # gitignored, survives sessions
@@ -38,11 +36,17 @@ def galaxy_deps(tool) -> Path:
     """Install the galaxy.yml dependencies once, into a cache that persists."""
     deps = yaml.safe_load((ROOT / "galaxy.yml").read_text())["dependencies"]
     for name, version in deps.items():
-        if (DEPS_CACHE / "ansible_collections" / Path(*name.split("."))).is_dir():
-            continue
+        manifest = (
+            DEPS_CACHE / "ansible_collections" / Path(*name.split("."))
+            / "MANIFEST.json"
+        )  # fmt: skip
+        if manifest.is_file():
+            installed = json.loads(manifest.read_text())["collection_info"]["version"]
+            if installed == version:
+                continue
         done = tool(
             "ansible-galaxy", "collection", "install", f"{name}:{version}",
-            "-p", DEPS_CACHE,
+            "-p", DEPS_CACHE, "--force",
         )  # fmt: skip
         assert done.returncode == 0, done.stderr
     return DEPS_CACHE
@@ -57,7 +61,7 @@ def free_port() -> int:
 
 @pytest.fixture
 def run_playbook(tool, collections_path, galaxy_deps, tmp_path):
-    """Return run_playbook(name, host_vars) -> CompletedProcess on localhost."""
+    """Run a collection playbook against an inventory (localhost by default)."""
     env = {
         "ANSIBLE_COLLECTIONS_PATH": f"{collections_path}:{galaxy_deps}",
         "ANSIBLE_HOME": str(tmp_path / "ansible-home"),
@@ -78,6 +82,3 @@ def run_playbook(tool, collections_path, galaxy_deps, tmp_path):
         )  # fmt: skip
 
     return go
-
-
-PYTHON = sys.executable

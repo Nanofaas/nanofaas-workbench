@@ -1,0 +1,22 @@
+---
+# The shared play behind deploy, collect and undeploy (not a public entry
+# point). wb_action and wb_hosts come from the importing playbook.
+- name: "Workbench {{ wb_action }}"
+  hosts: "{{ wb_hosts }}"
+  gather_facts: false
+  vars_files:
+    - "{{ workbench_vars }}"
+  tasks:
+    - name: Validate the host vars file
+      ansible.builtin.import_tasks: tasks/validate_vars.yml
+
+    - name: "Run {{ wb_action }} for each instance"
+      ansible.builtin.include_role:
+        # Role names cannot hold a hyphen: component node-exporter is role node_exporter.
+        name: "nanofaas.workbench.{{ item.component | replace('-', '_') }}"
+        tasks_from: "{{ wb_action }}"
+      vars:
+        instance: "{{ item }}"
+      loop: "{{ (instances | reverse | list) if wb_action == 'undeploy' else instances }}"
+      loop_control:
+        label: "{{ item.name }}"

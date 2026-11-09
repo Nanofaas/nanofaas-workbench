@@ -1,5 +1,4 @@
 import json
-import platform
 import subprocess
 import time
 import urllib.request
@@ -35,10 +34,6 @@ def names(*filters: str) -> list[str]:
     return docker("ps", "-a", *args, "--format", "{{.Names}}").stdout.split()
 
 
-@pytest.mark.skipif(
-    platform.system() != "Linux",
-    reason="host network and the rslave root mount need a Linux engine; CI runs it",
-)
 def test_node_exporter_serves_metrics(run_playbook, free_port):
     try:
         done = run_playbook("deploy", vars_for(free_port, cpuset="0"))
@@ -47,7 +42,7 @@ def test_node_exporter_serves_metrics(run_playbook, free_port):
         body = ""
         for _ in range(20):
             try:
-                body = urllib.request.urlopen(url, timeout=3).read().decode()  # noqa: S310
+                body = urllib.request.urlopen(url, timeout=3).read().decode()
                 break
             except OSError:
                 time.sleep(0.5)
@@ -58,7 +53,8 @@ def test_node_exporter_serves_metrics(run_playbook, free_port):
             info["Config"]["Labels"]["nanofaas.workbench/component"] == "node-exporter"
         )
         assert info["HostConfig"]["CpusetCpus"] == "0"
-        assert info["HostConfig"]["PidMode"] == "host"
+        assert info["HostConfig"]["PidMode"] == ""
+        assert info["HostConfig"]["NetworkMode"] != "host"
     finally:
         run_playbook("undeploy", vars_for(free_port))
 
