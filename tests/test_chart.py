@@ -142,3 +142,16 @@ def test_configmap_matches_container_config(tool, tmp_path):
     out = helm(tmp_path, "template", vals).stdout
     (cm,) = [o for o in objects(out) if o["kind"] == "ConfigMap"]
     assert cm["data"]["prometheus.yml"] == rendered.read_text()
+
+
+def test_host_paths_are_typed_so_nothing_is_created_on_the_node(tmp_path):
+    out = helm(tmp_path, "template", values("cadvisor", "log-collector", "loadgen"))
+    for o in objects(out.stdout):
+        spec = o.get("spec", {})
+        spec = spec.get("template", {}).get("spec", spec)
+        for v in spec.get("volumes", []):
+            path = v.get("hostPath", {})
+            if path.get("path") == "/var/run/docker.sock":
+                assert path["type"] == "Socket"
+            if path.get("path") in ("/var/log/pods", "/tmp/out"):
+                assert path["type"] == "Directory"

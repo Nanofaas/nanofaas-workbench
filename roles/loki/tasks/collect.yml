@@ -1,4 +1,10 @@
 ---
+- name: Refuse the pod form
+  when: (instance.form | default('container')) == 'pod'
+  ansible.builtin.include_role:
+    name: nanofaas.workbench.common
+    tasks_from: pod_collect_unsupported
+
 # On the controller the data dir already is the caller's: nothing to fetch.
 - name: Fetch the data dir as a tarball
   ansible.builtin.include_role:

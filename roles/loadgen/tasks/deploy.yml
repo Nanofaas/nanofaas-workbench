@@ -68,7 +68,6 @@
           image: "{{ loadgen_image }}"
           args: ["{{ loadgen_command }}"]
           env: "{{ loadgen_env }}"
-          script: "{{ instance.config.script }}"
           output_dir: "{{ instance.config.output_dir }}"
           mounts: "{{ instance.config.mounts | default({}) }}"
           user: "{{ loadgen_user }}"

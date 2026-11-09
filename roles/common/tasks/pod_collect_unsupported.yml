@@ -1,0 +1,4 @@
+---
+- name: Pod-form collect is not implemented
+  ansible.builtin.fail:
+    msg: "instance {{ instance.name }}: collect is not implemented for form: pod"

@@ -24,7 +24,7 @@ spec:
       {{- include "wb.resources" .resources | nindent 6 }}
   volumes:
     - name: proc
-      hostPath: {path: /proc}
+      hostPath: {path: /proc, type: Directory}
     - name: sys
-      hostPath: {path: /sys}
+      hostPath: {path: /sys, type: Directory}
 {{- end }}{{ end }}

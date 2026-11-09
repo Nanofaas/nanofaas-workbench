@@ -35,13 +35,17 @@ spec:
           volumeMounts:
             {{- include "wb.filemounts" (dict "files" .files "dir" "/fluent-bit/etc") | nindent 12 }}
             - {name: containers, mountPath: /var/log/containers, readOnly: true}
+            - {name: pods, mountPath: /var/log/pods, readOnly: true}
             - {name: storage, mountPath: /var/lib/fluent-bit}
           {{- include "wb.resources" .resources | nindent 10 }}
       volumes:
         - name: config
           configMap: {name: {{ include "wb.name" $ }}}
         - name: containers
-          hostPath: {path: {{ printf "%s/containers" .docker_root | quote }}}
+          hostPath: {path: {{ printf "%s/containers" .docker_root | quote }}, type: Directory}
+        # containerd's /var/log/containers entries are symlinks into here.
+        - name: pods
+          hostPath: {path: /var/log/pods, type: Directory}
         - name: storage
           hostPath: {path: {{ .storage_dir | quote }}, type: DirectoryOrCreate}
 {{- end }}{{ end }}

@@ -15,4 +15,4 @@ Retention and limits live in that file, not in the role config (the file owns th
 
 `collect`: with `collect_dir` set on a non-local host, the data dir is fetched as a tarball into
 `<collect_dir>/<instance>/`; on the controller it is a no-op.
-Image pinned by digest (`loki_image`, 3.7.8). Pod form: a Deployment with a Service on `config.port`; the data dir is an `emptyDir`.
+Image pinned by digest (`loki_image`, 3.7.8). Pod form (`collect` is not implemented and fails clearly): a Deployment with a Service on `config.port`; the data dir is an `emptyDir`.

@@ -2,12 +2,13 @@ import json
 import shutil
 import subprocess
 import time
+import uuid
 
 import pytest
 
 pytestmark = pytest.mark.kind
 
-CLUSTER = "wb-test"
+CLUSTER = f"wb-test-{uuid.uuid4().hex[:8]}"
 NODE = f"{CLUSTER}-control-plane"
 
 

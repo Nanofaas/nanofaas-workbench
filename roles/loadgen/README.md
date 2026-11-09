@@ -16,7 +16,7 @@ detached (`restart_policy: no`), stderr to `/out/generator.stderr`. Deploy retur
 is running or has exited 0. Undeploy stops with a 10 s grace and removes it. `collect` fetches
 `output_dir` as `loadgen-out.tar.gz` only when the host is not the controller.
 
-Pod form: a Kubernetes Job (`backoffLimit: 0`, `restartPolicy: Never`, host network), the script in the
+Pod form (`collect` is not implemented and fails clearly): a Kubernetes Job (`backoffLimit: 0`, `restartPolicy: Never`, host network), the script in the
 ConfigMap, `output_dir` a `hostPath` on the node, `mounts` read-only `hostPath`s. A repeat deploy uninstalls the
 release first (a Job's spec cannot be upgraded). Deploy returns once the Job is active or finished and fails when
 it has failed. Exit status:

@@ -6,6 +6,13 @@
       - --store_container_labels=true
       - "--housekeeping_interval={{ instance.config.housekeeping_interval | default('5s') }}"
 
+- name: Check the pod form's config
+  when: (instance.form | default('container')) == 'pod'
+  ansible.builtin.assert:
+    that: instance.config.node_name is defined
+    fail_msg: "instance {{ instance.name }}: the pod form needs config.node_name (one instance per node)"
+    quiet: true
+
 - name: Run cAdvisor (pod form)
   when: (instance.form | default('container')) == 'pod'
   ansible.builtin.include_role:

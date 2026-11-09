@@ -7,3 +7,8 @@
     kubeconfig: "{{ instance.config.kubeconfig | default(omit) }}"
     state: absent
     wait: true
+
+- name: Remove the chart copy
+  ansible.builtin.file:
+    path: "/tmp/wb-{{ instance.name }}/chart"
+    state: absent

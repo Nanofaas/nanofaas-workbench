@@ -5,6 +5,13 @@
       - --path.procfs=/host/proc
       - --path.sysfs=/host/sys
 
+- name: Check the pod form's config
+  when: (instance.form | default('container')) == 'pod'
+  ansible.builtin.assert:
+    that: instance.config.node_name is defined
+    fail_msg: "instance {{ instance.name }}: the pod form needs config.node_name (one instance per node)"
+    quiet: true
+
 - name: Run node_exporter (pod form)
   when: (instance.form | default('container')) == 'pod'
   ansible.builtin.include_role:

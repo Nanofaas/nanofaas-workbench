@@ -43,8 +43,8 @@
   vars:
     wb_key: log_collector
     wb_files: [fluent-bit.conf, parsers.conf]
-    wb_cpu: "{{ instance.config.cpus | default(omit) }}"
-    wb_memory: "{{ (instance.config.memory_mib ~ 'Mi') if instance.config.memory_mib is defined else omit }}"
+    wb_cpu: "{{ instance.config.cpus | default('') }}"
+    wb_memory: "{{ (instance.config.memory_mib ~ 'Mi') if instance.config.memory_mib is defined else '' }}"
     wb_values:
       image: "{{ log_collector_image }}"
       port: "{{ instance.config.port }}"

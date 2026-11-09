@@ -2,7 +2,7 @@
 # Inputs: instance, wb_key (the chart's values key for the component, e.g. log_collector),
 # wb_values (the component's values: image, args, port, ...); optional wb_files (names of files in
 # wb_files_dir, default /tmp/wb-<instance>, on the target host: they go into the ConfigMap byte for
-# byte), wb_cpu and wb_memory (resources when the instance has no cpuset), wb_wait (default true).
+# byte), wb_cpu and wb_memory (resources when the instance has no cpuset; '' or unset = none), wb_wait (default true).
 # instance.config.kubeconfig and instance.config.namespace (default "default") are optional.
 - name: Read the rendered config files
   ansible.builtin.slurp:
@@ -28,10 +28,17 @@
       {%- endfor -%}
       {{ n.c if n.c else '' }}
 
+# The chart ships with the collection on the controller; helm runs on the target.
+- name: Copy the chart to the target
+  ansible.builtin.copy:
+    src: "{{ role_path }}/../../chart"
+    dest: "/tmp/wb-{{ instance.name }}/"
+    mode: preserve
+
 - name: Install the release
   kubernetes.core.helm:
     name: "wb-{{ instance.name }}"
-    chart_ref: "{{ role_path }}/../../chart"
+    chart_ref: "/tmp/wb-{{ instance.name }}/chart"
     release_namespace: "{{ instance.config.namespace | default('default') }}"
     kubeconfig: "{{ instance.config.kubeconfig | default(omit) }}"
     wait: "{{ wb_wait | default(true) }}"
@@ -46,5 +53,5 @@
                                     | zip(common_slurped.results | map(attribute='content')
                                           | map('b64decode') | list))})
            | combine({'resources': ({'cpu': common_cpus | string} if common_cpus != ''
-                                    else ({'cpu': wb_cpu | string} if wb_cpu is defined else {}))
-                                   | combine({'memory': wb_memory} if wb_memory is defined else {})}) }}
+                                    else ({'cpu': wb_cpu | string} if (wb_cpu | default('')) != '' else {}))
+                                   | combine({'memory': wb_memory} if (wb_memory | default('')) != '' else {})}) }}

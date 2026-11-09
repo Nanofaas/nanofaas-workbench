@@ -24,7 +24,6 @@ log_collector:
 loadgen:
   enabled: false
   files: {}   # {<script>: <content>}
-  script: ""
   env: {}
   output_dir: ""
   mounts: {}  # {host_path: container_path}, read-only

@@ -13,7 +13,7 @@ Not a component: shared task files the component roles include.
   when `wb_graceful` is true, otherwise kills immediately.
 - `pod_deploy.yml` installs the chart for one instance (inputs `wb_key`, `wb_values`, optional `wb_files`,
   `wb_files_dir`, `wb_cpu`, `wb_memory`, `wb_wait`); `pod_undeploy.yml` runs `helm uninstall`
-  (a missing release is success).
+  (a missing release is success). The chart is copied to `/tmp/wb-<instance>/chart` on the target first (helm runs there) and removed on undeploy. `pod_collect_unsupported.yml` fails `collect` for pod-form instances of components that collect something.
 
 ## Pod form
 

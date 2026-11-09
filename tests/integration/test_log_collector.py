@@ -78,7 +78,12 @@ def test_collector_is_hardened_and_running(deployed, host_get):
     )
     assert f"LOKI_PORT={loki_port}" in env
     # fluent-bit really started and serves its metrics
-    metrics = host_get(f"http://127.0.0.1:{fb_port}/api/v2/metrics/prometheus")
+    metrics = ""
+    for _ in range(30):
+        metrics = host_get(f"http://127.0.0.1:{fb_port}/api/v2/metrics/prometheus")
+        if "fluentbit_input_records_total" in metrics:
+            break
+        time.sleep(1)
     assert "fluentbit_input_records_total" in metrics
 
 

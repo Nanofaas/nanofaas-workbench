@@ -1,4 +1,10 @@
 ---
+- name: Refuse the pod form
+  when: (instance.form | default('container')) == 'pod'
+  ansible.builtin.include_role:
+    name: nanofaas.workbench.common
+    tasks_from: pod_collect_unsupported
+
 - name: Check the required config
   ansible.builtin.assert:
     that:
