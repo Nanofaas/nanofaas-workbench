@@ -16,11 +16,13 @@ are on the caller's loopback), read-only root, all capabilities dropped, runs as
 | `targets` | `{}` | initial targets, `{<name>: <target>}` |
 | `image` | `supervisor_image` | e.g. a locally built `:test` tag |
 
-A target is `{"kind": …, "params": {…}, "toleratedSeconds": 0}`:
+A target is `{"kind": …, "params": {…}, "toleratedSeconds": 0}` (`toleratedSeconds` finite, >= 0;
+measured on a monotonic clock, so wall-clock steps do not shift it). Names, also those in
+`targets`, match `[A-Za-z0-9_.-]{1,128}`:
 
 | `kind` | `params` | fails when |
 | --- | --- | --- |
-| `scrape_up` | `job`, `labels` (`{}`) | any `up{job=…, <labels>}` is not 1, or none exists |
+| `scrape_up` | `job`, `labels` (`{}`, no `job` key) | any `up{job=…, <labels>}` is not 1, or none exists |
 | `container_running` | `name`, `node` | `time() - container_last_seen{name=…, node=…} > 3 * interval`, or none exists |
 | `swap_quiet` | `node`, `maxSwapPages` (`256`), `minAvailableBytes` (8 GiB), `window` (`30s`) | `increase(node_vmstat_pswpin[W]) + increase(node_vmstat_pswpout[W]) > maxSwapPages` or `node_memory_MemAvailable_bytes < minAvailableBytes` |
 | `http_ok` | `url`, `timeoutSeconds` (`5`) | the GET is not 2xx |
@@ -31,7 +33,8 @@ failing target, with the error as `detail`.
 API:
 
 - `PUT /targets/<name>` (name `[A-Za-z0-9_.-]{1,128}`): add or replace → 204; an invalid
-  target → 400. Putting the identical target again keeps its state.
+  target → 400. Putting the identical target again keeps its state; putting a changed
+  target starts it over, which also clears a sticky fault.
 - `DELETE /targets/<name>` → 204, also when absent. A removed target is never reported again.
 - `GET /status` → `{"state", "targets": {name: {"kind", "failing", "since", "detail"}},
   "anomalies": [{"target", "kind", "detail", "since"}], "checkedAt"}` (`checkedAt` is the end

@@ -1,3 +1,4 @@
+import http.client
 import json
 import os
 import re
@@ -77,6 +78,27 @@ def test_put_status_delete(served):
 def test_bad_requests(served, path, method, body, code):
     _, base = served
     assert call(base + path, method, body)[0] == code
+    assert status(base)["targets"] == {}
+
+
+@pytest.mark.parametrize(
+    ("length", "code"), [("abc", 400), ("-1", 400), ("70000", 413)]
+)
+def test_bad_content_length(served, length, code):
+    _, base = served
+    conn = http.client.HTTPConnection(base.removeprefix("http://"), timeout=5)
+    conn.putrequest("PUT", "/targets/ne")
+    conn.putheader("Content-Length", length)
+    conn.endheaders()
+    conn.send(json.dumps(SPEC).encode())
+    assert conn.getresponse().status == code
+    conn.close()
+    assert status(base)["targets"] == {}
+
+
+def test_deeply_nested_body_is_a_bad_request(served):
+    _, base = served
+    assert call(f"{base}/targets/ne", "PUT", b"[" * 60_000)[0] == 400
     assert status(base)["targets"] == {}
 
 
@@ -188,6 +210,7 @@ def test_module_serves_initial_targets():
         ["--prometheus", "http://p", "--targets", "{not json"],
         ["--prometheus", "http://p", "--targets", '{"x": {"kind": "nope"}}'],
         ["--prometheus", "http://p", "--interval", "0"],
+        ["--prometheus", "http://p", "--targets", json.dumps({"bad name": SPEC})],
     ],
 )
 def test_module_rejects_bad_arguments(args):

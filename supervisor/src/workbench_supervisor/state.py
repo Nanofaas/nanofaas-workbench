@@ -26,7 +26,8 @@ def iso(t: float | None) -> str | None:
 class _Target:
     spec: dict[str, Any]
     gen: int
-    since: float | None = None  # failing since
+    since: float | None = None  # failing since, wall clock (reported)
+    started: float = 0.0  # failing since, monotonic (measured)
     detail: str | None = None
     fault: tuple[float, str | None] | None = None  # sticky: (since, detail)
 
@@ -34,9 +35,14 @@ class _Target:
 class State:
     """The targets, their failures and the overall state."""
 
-    def __init__(self, clock: Callable[[], float] = time.time) -> None:
-        """Keep no targets; `clock` returns POSIX seconds."""
+    def __init__(
+        self,
+        clock: Callable[[], float] = time.time,
+        monotonic: Callable[[], float] = time.monotonic,
+    ) -> None:
+        """Keep no targets; `clock` stamps times, `monotonic` measures them."""
         self._clock = clock
+        self._monotonic = monotonic
         self._lock = threading.Lock()
         self._targets: dict[str, _Target] = {}
         self._gen = 0
@@ -81,6 +87,7 @@ class State:
                 return
             if target.since is None:
                 target.since = self._clock()
+                target.started = self._monotonic()
             target.detail = detail
             self._settle(target)
 
@@ -88,7 +95,7 @@ class State:
         """Turn a failure that outlasted its tolerance into a fault (lock held)."""
         if target.since is None or target.fault is not None:
             return
-        if self._clock() - target.since >= target.spec["toleratedSeconds"]:
+        if self._monotonic() - target.started >= target.spec["toleratedSeconds"]:
             target.fault = (target.since, target.detail)
 
     def status(self) -> dict[str, Any]:

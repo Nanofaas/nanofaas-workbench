@@ -20,7 +20,7 @@ def passing(kind, params):
 
 
 def test_new_target_is_healthy():
-    state = State(Clock())
+    state = State(Clock(), Clock())
     state.put("t", SPEC)
     status = state.status()
     assert status["state"] == "healthy"
@@ -33,7 +33,7 @@ def test_new_target_is_healthy():
 
 def test_tolerance_degrades_then_faults():
     clock = Clock()
-    state = State(clock)
+    state = State(clock, clock)
     state.put("t", SPEC)
     state.run_checks(failing())
     clock.now += 3
@@ -52,7 +52,7 @@ def test_tolerance_degrades_then_faults():
 
 def test_tolerance_is_measured_at_status_time_too():
     clock = Clock()
-    state = State(clock)
+    state = State(clock, clock)
     state.put("t", SPEC)
     state.run_checks(failing())
     clock.now += 11
@@ -60,7 +60,7 @@ def test_tolerance_is_measured_at_status_time_too():
 
 
 def test_zero_tolerance_faults_at_once():
-    state = State(Clock())
+    state = State(Clock(), Clock())
     state.put("t", {**SPEC, "toleratedSeconds": 0})
     state.run_checks(failing())
     assert state.status()["state"] == "fault"
@@ -68,7 +68,7 @@ def test_zero_tolerance_faults_at_once():
 
 def test_recovery_within_tolerance_is_healthy():
     clock = Clock()
-    state = State(clock)
+    state = State(clock, clock)
     state.put("t", SPEC)
     state.run_checks(failing())
     clock.now += 5
@@ -79,7 +79,7 @@ def test_recovery_within_tolerance_is_healthy():
 
 def test_fault_is_sticky_until_removed():
     clock = Clock()
-    state = State(clock)
+    state = State(clock, clock)
     state.put("t", SPEC)
     state.run_checks(failing("boom"))
     clock.now += 11
@@ -104,7 +104,7 @@ def test_fault_is_sticky_until_removed():
 
 def test_changed_spec_starts_over():
     clock = Clock()
-    state = State(clock)
+    state = State(clock, clock)
     state.put("t", {**SPEC, "toleratedSeconds": 0})
     state.run_checks(failing())
     assert state.status()["state"] == "fault"
@@ -116,7 +116,7 @@ def test_check_exception_marks_failing():
     def broken(kind, params):
         raise OSError("refused")
 
-    state = State(Clock())
+    state = State(Clock(), Clock())
     state.put("t", SPEC)
     state.run_checks(broken)
     target = state.status()["targets"]["t"]
@@ -125,4 +125,20 @@ def test_check_exception_marks_failing():
 
 
 def test_remove_absent_is_fine():
-    State(Clock()).remove("nope")
+    State(Clock(), Clock()).remove("nope")
+
+
+def test_wall_clock_steps_do_not_change_tolerance():
+    wall, mono = Clock(), Clock()
+    state = State(wall, mono)
+    state.put("t", SPEC)
+    state.run_checks(failing())
+    wall.now += 3600  # e.g. chronyc makestep
+    mono.now += 3
+    state.run_checks(failing())
+    status = state.status()
+    assert status["state"] == "degraded"
+    assert status["targets"]["t"]["since"] == "1970-01-01T00:16:40.000+00:00"
+    wall.now -= 7200
+    mono.now += 8
+    assert state.status()["state"] == "fault"

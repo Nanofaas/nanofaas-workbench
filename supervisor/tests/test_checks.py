@@ -67,7 +67,8 @@ def test_container_running_fails_when_stale(prom):
 
 
 def test_container_running_fails_without_series(prom):
-    assert check(prom, "container_running", name="wb-x", node="n1") is not None
+    detail = check(prom, "container_running", name="wb-x", node="n1")
+    assert detail == "no container_last_seen series for wb-x on n1"
 
 
 # swap_quiet
@@ -116,9 +117,9 @@ def test_swap_quiet_fails_without_series(prom):
     assert check(prom, "swap_quiet", node="n1") is not None
 
 
-def test_prometheus_error_raises(prom):
+def test_prometheus_error_raises_with_its_reason(prom):
     prom.status = "error"
-    with pytest.raises(URLError):
+    with pytest.raises(URLError, match="HTTP 400: bad query"):
         check(prom, "scrape_up", job="node")
 
 
@@ -200,6 +201,9 @@ def test_validate_fills_defaults():
         {"kind": "scrape_up", "params": {"job": "j"}, "toleratedSeconds": -1},
         {"kind": "scrape_up", "params": {"job": "j"}, "toleratedSeconds": "5"},
         {"kind": "scrape_up", "params": {"job": "j"}, "toleratedSeconds": True},
+        {"kind": "scrape_up", "params": {"job": "j"}, "toleratedSeconds": float("nan")},
+        {"kind": "scrape_up", "params": {"job": "j"}, "toleratedSeconds": float("inf")},
+        {"kind": "scrape_up", "params": {"job": "j", "labels": {"job": "other"}}},
         {"kind": "scrape_up", "params": {"job": "j"}, "other": 1},
         {"kind": "swap_quiet", "params": {"node": "n", "window": "30s) or vector(1"}},
         {"kind": "swap_quiet", "params": {"node": "n", "maxSwapPages": "1"}},

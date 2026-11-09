@@ -1,6 +1,7 @@
 """Target specs and the checks behind each kind."""
 
 import json
+import math
 import re
 import urllib.parse
 import urllib.request
@@ -63,6 +64,8 @@ def validate(spec: object) -> dict[str, Any]:
     labels = params.get("labels", {})
     if not all(LABEL_NAME.match(k) and isinstance(v, str) for k, v in labels.items()):
         raise ValueError("labels map label names to strings")
+    if "job" in labels:
+        raise ValueError("scrape_up takes job as its own param, not in labels")
     if kind == "swap_quiet" and not DURATION.match(params["window"]):
         raise ValueError("window is a Prometheus duration such as 30s")
     if kind == "http_ok" and not (
@@ -70,8 +73,8 @@ def validate(spec: object) -> dict[str, Any]:
     ):
         raise ValueError("http_ok needs an http(s) url and a positive timeout")
     tolerated = spec.get("toleratedSeconds", 0)
-    if not _number(tolerated, float) or tolerated < 0:
-        raise ValueError("toleratedSeconds is a non-negative number")
+    if not _number(tolerated, float) or not math.isfinite(tolerated) or tolerated < 0:
+        raise ValueError("toleratedSeconds is a finite non-negative number")
     return {"kind": kind, "params": params, "toleratedSeconds": tolerated}
 
 
@@ -107,8 +110,16 @@ class Checker:
         url = f"{self.prometheus}/api/v1/query?" + urllib.parse.urlencode(
             {"query": promql}
         )
-        with self.open(url, timeout=max(self.interval, 1)) as resp:
-            body = json.load(resp)
+        try:
+            with self.open(url, timeout=max(self.interval, 1)) as resp:
+                body = json.load(resp)
+        except HTTPError as err:
+            # Prometheus answers a bad query with 4xx and the reason in the body.
+            try:
+                reason = json.load(err).get("error")
+            except (ValueError, AttributeError):
+                reason = None
+            raise URLError(f"prometheus: HTTP {err.code}: {reason}") from err
         if body.get("status") != "success":
             raise URLError(f"prometheus: {body.get('error')}")
         return [float(r["value"][1]) for r in body["data"]["result"]]
@@ -131,7 +142,7 @@ class Checker:
         )
         values = self.query(promql)
         if not values:
-            return f"container {name} on {node}: never seen"
+            return f"no container_last_seen series for {name} on {node}"
         if min(values) > 3 * self.interval:
             return f"container {name} on {node}: last seen {min(values):.0f}s ago"
         return None

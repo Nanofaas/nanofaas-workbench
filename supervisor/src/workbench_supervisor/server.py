@@ -8,7 +8,8 @@ from typing import Any
 from workbench_supervisor.checks import validate
 from workbench_supervisor.state import State
 
-TARGET = re.compile(r"/targets/([A-Za-z0-9_.-]{1,128})\Z")
+NAME = re.compile(r"[A-Za-z0-9_.-]{1,128}\Z")
+TARGET = re.compile(r"/targets/([^/]*)\Z")
 MAX_BODY = 64 * 1024
 STATES = ("healthy", "degraded", "fault")
 
@@ -47,6 +48,10 @@ def make_server(state: State, bind: str, port: int) -> ThreadingHTTPServer:
             self.end_headers()
             self.wfile.write(data)
 
+        def _name(self) -> str | None:
+            match = TARGET.match(self.path)
+            return match.group(1) if match and NAME.match(match.group(1)) else None
+
         def do_GET(self) -> None:
             if self.path == "/status":
                 self._send(200, json.dumps(state.status()), "application/json")
@@ -56,29 +61,34 @@ def make_server(state: State, bind: str, port: int) -> ThreadingHTTPServer:
                 self._send(404)
 
         def do_PUT(self) -> None:
-            match = TARGET.match(self.path)
-            if not match:
+            name = self._name()
+            if name is None:
                 self._send(404)
                 return
-            length = int(self.headers.get("Content-Length") or 0)
-            if length > MAX_BODY:
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                length = -1
+            if not 0 <= length <= MAX_BODY:
+                # The body is not read: drop the connection after answering.
                 self.close_connection = True
-                self._send(413)
+                self._send(413 if length > MAX_BODY else 400)
                 return
             try:
                 spec = validate(json.loads(self.rfile.read(length)))
-            except ValueError as err:  # JSONDecodeError is a ValueError
+            # JSONDecodeError is a ValueError; deep nesting is a RecursionError.
+            except (ValueError, RecursionError) as err:
                 self._send(400, f"{err}\n", "text/plain")
                 return
-            state.put(match.group(1), spec)
+            state.put(name, spec)
             self._send(204)
 
         def do_DELETE(self) -> None:
-            match = TARGET.match(self.path)
-            if not match:
+            name = self._name()
+            if name is None:
                 self._send(404)
                 return
-            state.remove(match.group(1))
+            state.remove(name)
             self._send(204)
 
         def log_message(self, format: str, *args: Any) -> None:

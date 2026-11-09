@@ -8,7 +8,7 @@ import threading
 import urllib.parse
 
 from workbench_supervisor.checks import Checker, validate
-from workbench_supervisor.server import make_server
+from workbench_supervisor.server import NAME, make_server
 from workbench_supervisor.state import State
 
 
@@ -31,6 +31,8 @@ def main(argv: list[str] | None = None) -> None:
         if not isinstance(targets, dict):
             raise ValueError("--targets is a JSON object")
         for name, spec in targets.items():
+            if not NAME.match(name):
+                raise ValueError(f"target name {name!r} must match {NAME.pattern}")
             state.put(name, validate(spec))
     except ValueError as err:
         parser.error(f"--targets: {err}")
