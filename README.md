@@ -21,7 +21,7 @@ Details, config keys and pinned images are in each role's `README.md`.
 
 ## Run forms
 
-`form: container` (default) runs `wb-<instance>` through the Docker SDK on the
+`form: container` (default) runs `wb-<instance>` through the Docker API on the
 target; `form: pod` installs the collection's Helm chart as release
 `wb-<instance>` (needs `helm` 3 and a kubeconfig on the target). See
 `roles/common/README.md`.

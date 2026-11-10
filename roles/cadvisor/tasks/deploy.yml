@@ -5,6 +5,7 @@
       - --docker_only=true
       - --store_container_labels=true
       - "--housekeeping_interval={{ instance.config.housekeeping_interval | default('5s') }}"
+      - --allow_dynamic_housekeeping=false
 
 - name: Check the pod form's config
   when: (instance.form | default('container')) == 'pod'
