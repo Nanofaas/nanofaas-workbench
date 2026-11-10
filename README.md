@@ -42,7 +42,7 @@ format and its validation rules are in [docs/vars.md](docs/vars.md).
 ## By hand
 
 ```bash
-ansible-galaxy collection install git+https://github.com/Nanofaas/nanofaas-workbench.git,v0.1.0
+ansible-galaxy collection install git+https://github.com/Nanofaas/nanofaas-workbench.git,v0.1.1
 ansible-playbook -i localhost, -e workbench_vars=vars.json nanofaas.workbench.deploy
 ansible-playbook -i localhost, -e workbench_vars=vars.json nanofaas.workbench.collect
 ansible-playbook -i localhost, -e workbench_vars=vars.json nanofaas.workbench.undeploy

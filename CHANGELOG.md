@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.1
+
+- cAdvisor runs with `--allow_dynamic_housekeeping=false`, so `housekeeping_interval` holds for idle containers too.
+- Docs: `community.docker` needs `requests` on the target, not the Docker SDK.
+
 ## 0.1.0
 
 - Collection skeleton and the host vars format.

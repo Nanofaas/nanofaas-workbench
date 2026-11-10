@@ -4,7 +4,7 @@ import yaml
 
 
 def test_collection_builds(built_tarball: Path):
-    assert built_tarball.name == "nanofaas-workbench-0.1.0.tar.gz"
+    assert built_tarball.name == "nanofaas-workbench-0.1.1.tar.gz"
 
 
 def test_installs_and_resolves_playbooks(tool, ansible_env, tmp_path: Path):
