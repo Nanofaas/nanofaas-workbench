@@ -232,3 +232,10 @@ def test_module_rejects_bad_arguments(args):
     with pytest.raises(SystemExit) as failed:
         main(args)
     assert failed.value.code == 2
+
+
+@pytest.mark.parametrize("kind", [[], {}, None, False, 1])
+def test_non_string_kind_returns_400_without_modifying_targets(served, kind):
+    _, base = served
+    assert put(base, "invalid", {"kind": kind, "params": {}}) == 400
+    assert status(base)["targets"] == {}

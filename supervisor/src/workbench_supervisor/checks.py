@@ -54,7 +54,7 @@ def validate(spec: object) -> dict[str, Any]:
     }:
         raise ValueError("a target is {kind, params, toleratedSeconds, graceSeconds}")
     kind = spec.get("kind")
-    if kind not in PARAMS:
+    if not isinstance(kind, str) or kind not in PARAMS:
         raise ValueError(f"kind must be one of {sorted(PARAMS)}")
     given = spec.get("params")
     if not isinstance(given, dict) or not set(given) <= set(PARAMS[kind]):
