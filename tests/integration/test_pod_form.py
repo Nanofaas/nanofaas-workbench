@@ -118,7 +118,7 @@ def test_pod_form_node_exporter_and_prometheus(run_playbook, kubeconfig, tmp_pat
                         "node": {
                             "kind": "scrape_up",
                             "params": {"job": "node"},
-                            "graceSeconds": 0,
+                            "graceSeconds": 30,
                         }
                     },
                 },
@@ -137,6 +137,7 @@ def test_pod_form_node_exporter_and_prometheus(run_playbook, kubeconfig, tmp_pat
             },
         ]
     }
+    host_vars["instances"].append(host_vars["instances"].pop(1))
     try:
         done = run_playbook("deploy", host_vars)
         assert done.returncode == 0, done.stdout + done.stderr
@@ -170,16 +171,27 @@ def test_pod_form_node_exporter_and_prometheus(run_playbook, kubeconfig, tmp_pat
             "--timeout=120s",
         )
         assert ready.returncode == 0, ready.stderr
-        ready = kubectl(
-            kubeconfig,
-            "exec",
-            "wb-client",
-            "--",
-            "wget",
-            "-qO-",
-            "http://wb-pr:9090/-/ready",
+        # A fresh cluster may still be propagating Service DNS after pod readiness.
+        for _ in range(30):
+            ready = kubectl(
+                kubeconfig,
+                "exec",
+                "wb-client",
+                "--",
+                "wget",
+                "-qO-",
+                "http://wb-pr:9090/-/ready",
+            )
+            if ready.returncode == 0:
+                break
+            time.sleep(1)
+        assert ready.returncode == 0, (
+            ready.stderr
+            + kubectl(kubeconfig, "get", "svc,endpoints,pods", "-o", "wide").stdout
+            + kubectl(
+                kubeconfig, "exec", "wb-client", "--", "cat", "/etc/resolv.conf"
+            ).stdout
         )
-        assert ready.returncode == 0, ready.stderr
         admin = kubectl(
             kubeconfig,
             "exec",
@@ -203,6 +215,7 @@ def test_pod_form_node_exporter_and_prometheus(run_playbook, kubeconfig, tmp_pat
                 break
             time.sleep(2)
         assert "wb-ne:9100" in scraped, last
+        report = {}
         for _ in range(30):
             status = kubectl(
                 kubeconfig,
@@ -215,11 +228,16 @@ def test_pod_form_node_exporter_and_prometheus(run_playbook, kubeconfig, tmp_pat
             )
             assert status.returncode == 0, status.stderr
             report = json.loads(status.stdout)
-            if report["state"] == "healthy":
+            if (
+                report["state"] == "healthy"
+                and report["checkedAt"]
+                and not report["targets"]["node"]["failing"]
+            ):
                 break
             time.sleep(1)
         assert report["state"] == "healthy", report
-        assert "node" in report["targets"]
+        assert not report["targets"]["node"]["failing"]
+        assert report["checkedAt"]
     finally:
         kubectl(kubeconfig, "delete", "pod/wb-client", "--ignore-not-found")
         for _ in range(2):  # the second run is the idempotent one

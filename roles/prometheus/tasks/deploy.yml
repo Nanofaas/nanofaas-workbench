@@ -35,7 +35,9 @@
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
       - "--storage.tsdb.retention.time={{ instance.config.retention | default('7d') }}"
-      - "--web.listen-address={{ instance.config.bind | default('0.0.0.0' if (instance.form | default('container')) == 'pod' else '127.0.0.1') }}:{{ instance.config.port }}"
+      - >-
+        --web.listen-address={{ instance.config.bind | default(
+          '0.0.0.0' if (instance.form | default('container')) == 'pod' else '127.0.0.1') }}:{{ instance.config.port }}
 
 - name: Run Prometheus (pod form)
   when: (instance.form | default('container')) == 'pod'

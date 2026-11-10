@@ -65,7 +65,9 @@ def test_prometheus_collect_archives_the_snapshot(run_playbook, stub_api, tmp_pa
     }  # fmt: skip
     done = run_playbook("collect", vs)
     assert done.returncode == 0, done.stdout + done.stderr
-    with tarfile.open(tmp_path / "out" / "localhost" / "pr" / "prometheus-snapshot.tar.gz") as t:
+    with tarfile.open(
+        tmp_path / "out" / "localhost" / "pr" / "prometheus-snapshot.tar.gz"
+    ) as t:
         assert "./meta.json" in t.getnames()
 
 
