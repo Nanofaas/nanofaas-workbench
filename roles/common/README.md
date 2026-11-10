@@ -32,3 +32,13 @@ Not a component: shared task files the component roles include.
 as in the container form and passed to the chart, whose ConfigMap carries them byte for byte.
 Pod form differences: the data/storage dirs below are an `emptyDir` unless stated; `bind` only
 matters for components on the host network.
+
+`collect_container` gathers `container.json`, `container.log`,
+`container-stats.json` and command exit codes in `container-evidence.json`.
+Pass `wb_container` and the absolute controller path `wb_evidence_dir`. It does
+not stop or remove the container; callers determine the collection window.
+
+`fetch_dir_tarball` verifies the controller archive against the target's SHA-256
+and writes `<archive>.sha256` alongside it. A missing source fails without
+creating that path. Only temporary archive files are removed; the source is
+always retained.
