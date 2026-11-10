@@ -54,7 +54,7 @@ API:
 - `GET /metrics` → `workbench_supervisor_state{state="healthy|degraded|fault"} 0|1`,
   `workbench_supervisor_target_failing{target=…,kind=…} 0|1`.
 
-`collect`: nothing. Pod form: a Deployment on the host network with a Service on `config.port`.
+`collect`: nothing. Pod form: a Deployment on pod networking with a Service on `config.port`.
 
 The pod form uses pod networking and a ClusterIP Service, listening on `0.0.0.0`
 by default. Explicit loopback listeners are rejected. Targets on the node must

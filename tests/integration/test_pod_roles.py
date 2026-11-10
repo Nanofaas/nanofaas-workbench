@@ -270,3 +270,27 @@ def test_active_loadgen_with_failed_pod_is_rejected(run_playbook, stub_helm):
     done = run_playbook("deploy", lg_vars("failed", tmp / "out"), **env)
     assert done.returncode != 0
     assert "k6 Job failed" in done.stdout
+
+
+@pytest.mark.parametrize("cpufreq", [True, False])
+def test_node_exporter_pod_respects_cpufreq(run_playbook, stub_helm, remote, cpufreq):
+    env, tmp = stub_helm
+    vs = {
+        "instances": [
+            {
+                "name": "ne-freq",
+                "component": "node-exporter",
+                "form": "pod",
+                "config": {"node_name": "worker", "cpufreq": cpufreq},
+            }
+        ]
+    }
+    try:
+        done = run_playbook("deploy", vs, inventory=remote, **env)
+        assert done.returncode == 0, done.stdout + done.stderr
+        args = yaml.safe_load((tmp / "values.yaml").read_text())["node_exporter"][
+            "args"
+        ]
+        assert ("--no-collector.cpufreq" in args) is (not cpufreq)
+    finally:
+        run_playbook("undeploy", vs, inventory=remote, **env)

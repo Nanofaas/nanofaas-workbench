@@ -16,7 +16,7 @@ The rendered config is `/tmp/wb-<instance>/prometheus.yml`; a changed file resta
 
 `collect`: POST `/api/v1/admin/tsdb/snapshot`, archive the snapshot (under `data_dir/snapshots`) to
 `<collect_dir>/<inventory_hostname>/<instance>/prometheus-snapshot.tar.gz`. Image pinned by digest (`prometheus_image`,
-3.16.0). Snapshots accumulate under `data_dir/snapshots` (nothing prunes them). Pod form (`collect` is not implemented and fails clearly): a Deployment on the host network (as the container form), the data dir is an `emptyDir`.
+3.16.0). Snapshots accumulate under `data_dir/snapshots` (nothing prunes them). Pod form (`collect` is not implemented and fails clearly): a Deployment on pod networking, with an `emptyDir` data directory.
 
 The pod form uses pod networking and a ClusterIP Service, listening on `0.0.0.0`
 by default. Explicit loopback listeners are rejected. Targets on the node must

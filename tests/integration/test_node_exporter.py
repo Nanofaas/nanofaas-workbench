@@ -55,6 +55,7 @@ def test_node_exporter_serves_metrics(run_playbook, free_port):
             info["Config"]["Labels"]["nanofaas.workbench/component"] == "node-exporter"
         )
         assert info["HostConfig"]["CpusetCpus"] == "0"
+        assert "--no-collector.cpufreq" not in info["Config"]["Cmd"]
         assert info["HostConfig"]["PidMode"] == ""
         assert info["HostConfig"]["NetworkMode"] != "host"
     finally:
@@ -89,3 +90,27 @@ def test_pod_form_fails_clearly(run_playbook, free_port):
     done = run_playbook("deploy", vars_for(free_port, form="pod"))
     assert done.returncode != 0
     assert "pod form" in done.stdout
+
+
+def test_disabled_cpufreq_keeps_cpu_memory_and_swap_metrics(run_playbook, free_port):
+    vs = vars_for(free_port, name="ne-no-cpufreq")
+    vs["instances"][0]["config"]["cpufreq"] = False
+    try:
+        done = run_playbook("deploy", vs)
+        assert done.returncode == 0, done.stdout + done.stderr
+        info = json.loads(docker("inspect", "wb-ne-no-cpufreq").stdout)[0]
+        assert "--no-collector.cpufreq" in info["Config"]["Cmd"]
+        body = (
+            urllib.request.urlopen(f"http://127.0.0.1:{free_port}/metrics", timeout=5)
+            .read()
+            .decode()
+        )
+        for metric in (
+            "node_cpu_seconds_total",
+            "node_memory_MemAvailable_bytes",
+            "node_vmstat_pswpin",
+        ):
+            assert metric in body
+        assert 'node_scrape_collector_success{collector="cpufreq"}' not in body
+    finally:
+        run_playbook("undeploy", vs)
