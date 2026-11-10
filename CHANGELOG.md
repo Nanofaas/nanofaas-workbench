@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.0 — release candidate
+## 0.3.0
 
 - Add metrics-only and final collector collection. Final collection stops owned
   writers and retrieves buffers even when the metrics endpoint fails.
