@@ -1,3 +1,3 @@
 ---
 # Built from images/supervisor/Dockerfile; the tag is the collection version.
-supervisor_image: ghcr.io/nanofaas/workbench-supervisor:0.2.0
+supervisor_image: ghcr.io/nanofaas/workbench-supervisor:0.3.0

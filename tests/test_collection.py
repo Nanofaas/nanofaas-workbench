@@ -4,7 +4,7 @@ import yaml
 
 
 def test_collection_builds(built_tarball: Path):
-    assert built_tarball.name == "nanofaas-workbench-0.2.0.tar.gz"
+    assert built_tarball.name == "nanofaas-workbench-0.3.0.tar.gz"
 
 
 def test_installs_and_resolves_playbooks(tool, ansible_env, tmp_path: Path):
@@ -27,3 +27,11 @@ def test_chart_default_ports_match_the_roles():
     assert '"--port", type=int, default=8099' in main
     assert chart["cadvisor"]["port"] == 8089
     assert cadvisor.count("instance.config.port | default(8089)") == 3
+
+
+def test_documented_install_matches_collection_release():
+    root = Path(__file__).parents[1]
+    version = yaml.safe_load((root / "galaxy.yml").read_text())["version"]
+    readme = (root / "README.md").read_text()
+    assert f"nanofaas-workbench.git,v{version}" in readme
+    assert "collect_dir/<host>/<instance>/" in readme
