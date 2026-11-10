@@ -1,0 +1,53 @@
+---
+# Inputs: wb_container, wb_evidence_dir (on the controller). Never stops or deletes.
+- name: Create the container evidence directory
+  ansible.builtin.file:
+    path: "{{ wb_evidence_dir }}"
+    state: directory
+    mode: "0755"
+  delegate_to: localhost
+  become: false
+
+- name: Inspect the evidence container
+  community.docker.docker_container_info:
+    name: "{{ wb_container }}"
+  register: common_evidence_container
+
+- name: Collect an existing container
+  when: common_evidence_container.exists
+  block:
+    - name: Read container logs
+      ansible.builtin.command:
+        argv: [docker, logs, "{{ wb_container }}"]
+      register: common_evidence_log
+      changed_when: false
+      failed_when: false
+      timeout: 30
+
+    - name: Read container resource usage
+      ansible.builtin.command:
+        argv: [docker, stats, --no-stream, '--format={% raw %}{{json .}}{% endraw %}', "{{ wb_container }}"]
+      register: common_evidence_stats
+      changed_when: false
+      failed_when: false
+      timeout: 30
+
+    - name: Save container evidence
+      ansible.builtin.copy:
+        content: "{{ common_evidence_file.content }}"
+        dest: "{{ wb_evidence_dir }}/{{ common_evidence_file.name }}"
+        mode: "0644"
+      delegate_to: localhost
+      become: false
+      loop:
+        - name: container.json
+          content: "{{ common_evidence_container.container | to_nice_json }}"
+        - name: container.log
+          content: "{{ common_evidence_log.stdout ~ common_evidence_log.stderr }}"
+        - name: container-stats.json
+          content: "{{ common_evidence_stats.stdout }}"
+        - name: container-evidence.json
+          content: "{{ {'logsExitCode': common_evidence_log.rc, 'statsExitCode': common_evidence_stats.rc} | to_nice_json }}"
+      loop_control:
+        loop_var: common_evidence_file
+        label: "{{ common_evidence_file.name }}"

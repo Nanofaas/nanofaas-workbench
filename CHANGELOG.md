@@ -1,6 +1,13 @@
 # Changelog
 
-## 0.2.0 — release candidate, not published
+## 0.3.0
+
+- Add metrics-only and final collector collection. Final collection stops owned
+  writers and retrieves buffers even when the metrics endpoint fails.
+- Verify archive SHA-256 at both ends and emit a fresh collection receipt.
+- Collect container diagnostics through shared Ansible tasks without deleting sources.
+
+## 0.2.0
 
 - Collect artifacts now use `<collect_dir>/<inventory_hostname>/<instance>/...`.
   Update readers together with the collection; historical archives stay in place.

@@ -9,14 +9,18 @@
   ansible.builtin.assert:
     that:
       - collect_dir is defined
-    fail_msg: "instance {{ instance.name }}: collect needs collect_dir"
+      - instance.config.collect_mode | default('snapshot') in ['metrics', 'snapshot', 'final']
+      - instance.config.port is defined
+      - instance.config.storage_dir is defined or instance.config.collect_mode | default('snapshot') == 'metrics'
+    fail_msg: "instance {{ instance.name }}: collect needs collect_dir, port, storage_dir and a valid collect_mode"
     quiet: true
 
-- name: Read the metrics
-  ansible.builtin.uri:
-    url: "http://127.0.0.1:{{ instance.config.port }}/api/v2/metrics/prometheus"
-    return_content: true
-  register: log_collector_metrics
+- name: Start a fresh collection receipt
+  ansible.builtin.set_fact:
+    log_collector_quiesced: false
+    log_collector_archive_sha256: null
+    log_collector_diagnostics_error: null
+    log_collector_mode: "{{ instance.config.collect_mode | default('snapshot') }}"
 
 - name: Create the collect dir
   ansible.builtin.file:
@@ -26,20 +30,99 @@
   delegate_to: localhost
   become: false
 
-- name: Store the metrics
-  ansible.builtin.copy:
-    content: "{{ log_collector_metrics.content }}"
-    dest: "{{ wb_collect_host_dir }}/{{ instance.name }}/metrics.txt"
-    mode: "0644"
-  delegate_to: localhost
-  become: false
+- name: Read metrics and recover independent evidence
+  block:
+    - name: Read the metrics
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ instance.config.port }}/api/v2/metrics/prometheus"
+        return_content: true
+        timeout: 3
+      register: log_collector_metrics
 
-# On the controller the storage dir already is the caller's: nothing to fetch.
-- name: Fetch the storage dir as a tarball
-  ansible.builtin.include_role:
-    name: nanofaas.workbench.common
-    tasks_from: fetch_dir_tarball
-  vars:
-    wb_src_dir: "{{ instance.config.storage_dir }}"
-    wb_archive: storage.tar.gz
-  when: inventory_hostname not in ['localhost', '127.0.0.1']
+    - name: Store the metrics
+      ansible.builtin.copy:
+        content: "{{ log_collector_metrics.content }}"
+        dest: "{{ wb_collect_host_dir }}/{{ instance.name }}/metrics.txt"
+        mode: "0644"
+      delegate_to: localhost
+      become: false
+
+  always:
+    - name: Recover state and record the outcome
+      block:
+        - name: Inspect the collector before stopping it
+          community.docker.docker_container_info:
+            name: "wb-{{ instance.name }}"
+          register: log_collector_container
+          when: log_collector_mode == 'final'
+
+        - name: Refuse to stop an unrelated container
+          ansible.builtin.assert:
+            that: >-
+              not log_collector_container.exists or
+              (log_collector_container.container.Config.Labels | default({}, true)).get('nanofaas.workbench/instance', '') == instance.name
+            fail_msg: "Refusing to stop an unrelated collector"
+            quiet: true
+          when: log_collector_mode == 'final'
+
+        - name: Stop the collector before archiving its buffers
+          community.docker.docker_container:
+            name: "wb-{{ instance.name }}"
+            state: stopped
+            stop_timeout: "{{ instance.config.stop_timeout | default(15) }}"
+          when:
+            - log_collector_mode == 'final'
+            - log_collector_container.exists
+
+        - name: Record quiesced writers
+          ansible.builtin.set_fact:
+            log_collector_quiesced: true
+          when: log_collector_mode == 'final'
+
+        - name: Collect final container diagnostics without blocking raw recovery
+          when: log_collector_mode == 'final'
+          block:
+            - name: Collect the container evidence
+              ansible.builtin.include_role:
+                name: nanofaas.workbench.common
+                tasks_from: collect_container
+              vars:
+                wb_container: "wb-{{ instance.name }}"
+                wb_evidence_dir: "{{ wb_collect_host_dir }}/{{ instance.name }}"
+          rescue:
+            - name: Record unavailable container diagnostics
+              ansible.builtin.set_fact:
+                log_collector_diagnostics_error: "{{ ansible_failed_result.msg | default('container evidence unavailable') }}"
+
+        - name: Fetch the storage dir as a tarball
+          ansible.builtin.include_role:
+            name: nanofaas.workbench.common
+            tasks_from: fetch_dir_tarball
+          vars:
+            wb_src_dir: "{{ instance.config.storage_dir }}"
+            wb_archive: storage.tar.gz
+          when: >-
+            log_collector_mode == 'final' or
+            (log_collector_mode == 'snapshot' and inventory_hostname not in ['localhost', '127.0.0.1'])
+
+        - name: Record the archive identity
+          ansible.builtin.set_fact:
+            log_collector_archive_sha256: "{{ common_archive_sha256 }}"
+          when: >-
+            log_collector_mode == 'final' or
+            (log_collector_mode == 'snapshot' and inventory_hostname not in ['localhost', '127.0.0.1'])
+
+      always:
+        - name: Persist the collection receipt
+          ansible.builtin.copy:
+            content: >-
+              {{ {'mode': log_collector_mode,
+                  'metricsAvailable': log_collector_metrics.status | default(-1) == 200,
+                  'quiesced': log_collector_quiesced,
+                  'archiveSha256': log_collector_archive_sha256,
+                  'sourcePreserved': true,
+                  'containerEvidenceError': log_collector_diagnostics_error} | to_nice_json }}
+            dest: "{{ wb_collect_host_dir }}/{{ instance.name }}/collection.json"
+            mode: "0644"
+          delegate_to: localhost
+          become: false

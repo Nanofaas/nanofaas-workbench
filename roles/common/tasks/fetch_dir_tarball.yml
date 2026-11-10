@@ -53,11 +53,43 @@
             then cat /tmp/tar.err >&2; exit 1; fi;
             chown {{ common_caller_ids }} /out/{{ wb_archive }}
 
+    - name: Hash the remote archive
+      ansible.builtin.stat:
+        path: "{{ common_scratch.path }}/{{ wb_archive }}"
+        checksum_algorithm: sha256
+      register: common_archive_remote
+
     - name: Fetch the tarball
       ansible.builtin.fetch:
         src: "{{ common_scratch.path }}/{{ wb_archive }}"
         dest: "{{ wb_collect_host_dir }}/{{ instance.name }}/{{ wb_archive }}"
         flat: true
+
+    - name: Hash the fetched archive
+      ansible.builtin.stat:
+        path: "{{ wb_collect_host_dir }}/{{ instance.name }}/{{ wb_archive }}"
+        checksum_algorithm: sha256
+      delegate_to: localhost
+      become: false
+      register: common_archive_local
+
+    - name: Verify the archive transfer
+      ansible.builtin.assert:
+        that: common_archive_local.stat.checksum == common_archive_remote.stat.checksum
+        fail_msg: "Archive checksum mismatch"
+        quiet: true
+
+    - name: Record the verified archive hash
+      ansible.builtin.copy:
+        content: "{{ common_archive_remote.stat.checksum }}\n"
+        dest: "{{ wb_collect_host_dir }}/{{ instance.name }}/{{ wb_archive }}.sha256"
+        mode: "0644"
+      delegate_to: localhost
+      become: false
+
+    - name: Return the verified archive hash
+      ansible.builtin.set_fact:
+        common_archive_sha256: "{{ common_archive_remote.stat.checksum }}"
 
   always:
     - name: Remove the scratch dir

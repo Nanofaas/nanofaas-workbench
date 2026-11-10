@@ -42,14 +42,14 @@ format and its validation rules are in [docs/vars.md](docs/vars.md).
 ## By hand
 
 ```bash
-ansible-galaxy collection install git+https://github.com/Nanofaas/nanofaas-workbench.git,v0.1.1
+ansible-galaxy collection install git+https://github.com/Nanofaas/nanofaas-workbench.git,v0.3.0
 ansible-playbook -i localhost, -e workbench_vars=vars.json nanofaas.workbench.deploy
 ansible-playbook -i localhost, -e workbench_vars=vars.json nanofaas.workbench.collect
 ansible-playbook -i localhost, -e workbench_vars=vars.json nanofaas.workbench.undeploy
 ```
 
 `deploy` starts the instances; `collect` writes snapshots and metrics under
-`collect_dir/<instance>/` (Prometheus snapshot, fluent-bit metrics, remote Loki
+`collect_dir/<host>/<instance>/` (Prometheus snapshot, fluent-bit metrics, remote Loki
 data and loadgen output); `undeploy` removes everything labelled with the
 instance. `localhost` and `127.0.0.1` run in place; any other inventory host
 goes over its own connection. Collection dependencies (`community.docker`,
