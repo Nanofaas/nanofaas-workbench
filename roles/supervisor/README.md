@@ -55,3 +55,7 @@ API:
   `workbench_supervisor_target_failing{target=…,kind=…} 0|1`.
 
 `collect`: nothing. Pod form: a Deployment on the host network with a Service on `config.port`.
+
+The pod form uses pod networking and a ClusterIP Service, listening on `0.0.0.0`
+by default. Explicit loopback listeners are rejected. Targets on the node must
+use an explicit address or Service DNS; pod loopback refers to the pod itself.

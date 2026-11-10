@@ -1,4 +1,7 @@
 {{- with .Values.supervisor }}{{ if .enabled }}
+{{- if regexMatch "^(127[.]|localhost$|::1$)" .bind }}
+{{- fail "pod Service bind cannot be loopback" }}
+{{- end }}
 {{- $ctx := dict "root" $ "component" "supervisor" }}
 {{ include "wb.service" (merge (dict "port" .port "target" .port) $ctx) }}
 ---
@@ -17,9 +20,6 @@ spec:
     metadata:
       labels: {{- include "wb.labels" $ctx | nindent 8 }}
     spec:
-      # Host network: Prometheus and the HTTP targets are on the node's loopback.
-      hostNetwork: true
-      dnsPolicy: ClusterFirstWithHostNet
       containers:
         - name: supervisor
           image: {{ required "supervisor.image is required" .image | quote }}
@@ -27,7 +27,7 @@ spec:
           ports:
             - containerPort: {{ .port }}
           readinessProbe:
-            tcpSocket: {host: {{ .bind | quote }}, port: {{ .port }}}
+            tcpSocket: {port: {{ .port }}}
           {{- include "wb.hardened" . | nindent 10 }}
           {{- include "wb.resources" .resources | nindent 10 }}
 {{- end }}{{ end }}

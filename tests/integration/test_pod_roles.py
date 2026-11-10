@@ -192,3 +192,39 @@ def test_pod_undeploy_leaves_no_scratch_dir(
     gone = run_playbook("undeploy", vs, inventory=remote, **env)
     assert gone.returncode == 0, gone.stdout + gone.stderr
     assert not Path(f"/tmp/wb-{name}").exists()
+
+
+@pytest.mark.parametrize("component", ["prometheus", "supervisor"])
+@pytest.mark.parametrize("bind", [None, "127.0.0.1"])
+def test_pod_service_listener(run_playbook, stub_helm, component, bind):
+    env, tmp = stub_helm
+    config = {
+        "port": 9090,
+        "data_dir": str(tmp / "data"),
+        "prometheus_url": "http://wb-pr:9090",
+    }
+    if bind is not None:
+        config["bind"] = bind
+    vs = {
+        "instances": [
+            {
+                "name": "listener",
+                "component": component,
+                "form": "pod",
+                "config": config,
+            }
+        ]
+    }
+    try:
+        done = run_playbook("deploy", vs, **env)
+        if bind:
+            assert done.returncode != 0
+            assert "loopback" in done.stdout
+        else:
+            assert done.returncode == 0, done.stdout + done.stderr
+            vals = yaml.safe_load((tmp / "values.yaml").read_text())[component]
+            assert vals["bind"] == "0.0.0.0"
+            assert any("0.0.0.0" in arg for arg in vals["args"])
+            assert "--web.enable-admin-api" not in vals["args"]
+    finally:
+        run_playbook("undeploy", vs, **env)

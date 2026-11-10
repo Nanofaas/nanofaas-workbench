@@ -7,6 +7,14 @@
     fail_msg: "instance {{ instance.name }}: prometheus needs config.port and config.data_dir"
     quiet: true
 
+- name: Reject a loopback listener for the pod Service
+  ansible.builtin.assert:
+    that:
+      - instance.config.bind | default('0.0.0.0') is not match('^(127[.]|localhost$|::1$)')
+    fail_msg: "pod Service bind cannot be loopback"
+    quiet: true
+  when: (instance.form | default('container')) == 'pod'
+
 - name: Create the config dir
   ansible.builtin.file:
     path: "/tmp/wb-{{ instance.name }}"
@@ -27,8 +35,7 @@
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
       - "--storage.tsdb.retention.time={{ instance.config.retention | default('7d') }}"
-      - "--web.listen-address={{ instance.config.bind | default('127.0.0.1') }}:{{ instance.config.port }}"
-      - --web.enable-admin-api
+      - "--web.listen-address={{ instance.config.bind | default('0.0.0.0' if (instance.form | default('container')) == 'pod' else '127.0.0.1') }}:{{ instance.config.port }}"
 
 - name: Run Prometheus (pod form)
   when: (instance.form | default('container')) == 'pod'
@@ -42,7 +49,7 @@
       image: "{{ prometheus_image }}"
       args: "{{ prometheus_command }}"
       port: "{{ instance.config.port }}"
-      bind: "{{ instance.config.bind | default('127.0.0.1') }}"
+      bind: "{{ instance.config.bind | default('0.0.0.0' if (instance.form | default('container')) == 'pod' else '127.0.0.1') }}"
 
 - name: Run Prometheus (container form)
   when: (instance.form | default('container')) == 'container'
@@ -69,7 +76,7 @@
         wb_restart: "{{ prometheus_config.changed }}"
         # Host network: the targets include the caller's loopback tunnels.
         wb_network_mode: host
-        wb_command: "{{ prometheus_command }}"
+        wb_command: "{{ prometheus_command + ['--web.enable-admin-api'] }}"
         wb_volumes:
           - "/tmp/wb-{{ instance.name }}/prometheus.yml:/etc/prometheus/prometheus.yml:ro"
           - "{{ instance.config.data_dir }}:/prometheus"
