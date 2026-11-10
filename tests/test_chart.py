@@ -25,6 +25,7 @@ COMPONENTS = {
             "args": ["exec k6"],
             "files": {"one-shot.js": "a"},
             "output_dir": "/tmp/out",
+            "node_name": "worker",
             "mounts": {"/b": "/y", "/a": "/x"},
             "user": "1000:1001",
         },
@@ -108,6 +109,7 @@ def test_loadgen_is_a_run_once_job(tmp_path):
     done = helm(tmp_path, "template", values("loadgen"))
     (job,) = [o for o in objects(done.stdout) if o["kind"] == "Job"]
     spec = job["spec"]["template"]["spec"]
+    assert spec["nodeName"] == "worker"
     assert spec["restartPolicy"] == "Never"
     assert job["spec"]["backoffLimit"] == 0
     mounts = {
@@ -179,3 +181,11 @@ def test_chart_rejects_loopback_service_bind(tmp_path, component):
     done = helm(tmp_path, "template", vals)
     assert done.returncode != 0
     assert "loopback" in done.stderr
+
+
+def test_loadgen_chart_requires_node_name(tmp_path):
+    vals = values("loadgen")
+    vals["loadgen"]["node_name"] = ""
+    done = helm(tmp_path, "template", vals)
+    assert done.returncode != 0
+    assert "loadgen.node_name is required" in done.stderr

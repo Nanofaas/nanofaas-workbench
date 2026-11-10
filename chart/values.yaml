@@ -26,6 +26,7 @@ loadgen:
   files: {}   # {<script>: <content>}
   env: {}
   output_dir: ""
+  node_name: ""
   mounts: {}  # {host_path: container_path}, read-only
   user: ""    # "uid:gid"
 supervisor:

@@ -7,6 +7,15 @@
     fail_msg: "instance {{ instance.name }}: loadgen needs config.script and config.output_dir"
     quiet: true
 
+- name: Require the node owning the pod files
+  ansible.builtin.assert:
+    that:
+      - instance.config.node_name is defined
+      - instance.config.node_name | default('') | length > 0
+    fail_msg: "instance {{ instance.name }}: loadgen pod needs config.node_name"
+    quiet: true
+  when: (instance.form | default('container')) == 'pod'
+
 - name: Create the scripts dir
   ansible.builtin.file:
     path: "/tmp/wb-{{ instance.name }}/scripts"
@@ -20,6 +29,7 @@
     mode: "0644"
 
 - name: Create the output dir when missing
+  when: (instance.form | default('container')) == 'container'
   ansible.builtin.include_role:
     name: nanofaas.workbench.common
     tasks_from: ensure_dir
@@ -83,26 +93,26 @@
           args: ["{{ loadgen_command }}"]
           env: "{{ loadgen_env }}"
           output_dir: "{{ instance.config.output_dir }}"
+          node_name: "{{ instance.config.node_name }}"
           mounts: "{{ instance.config.mounts | default({}) }}"
           user: "{{ loadgen_user }}"
 
-    - name: Wait for the job to have started
-      when: loadgen_job_prior.stdout | trim == ''
+    # .status.active counts Pending pods too; observe the actual pod phase on retries.
+    - name: Wait for the pod to have started
       ansible.builtin.command:
         argv: >-
           {{ ['kubectl'] + (['--kubeconfig', instance.config.kubeconfig] if instance.config.kubeconfig is defined else [])
-             + ['-n', instance.config.namespace | default('default'), 'get', 'job', 'wb-' ~ instance.name,
-                '-o', 'jsonpath={.status.active}/{.status.succeeded}/{.status.failed}'] }}
-      register: loadgen_job
-      until: loadgen_job.stdout != '//'
+             + ['-n', instance.config.namespace | default('default'), 'get', 'pods',
+                '-l', 'job-name=wb-' ~ instance.name, '-o', 'jsonpath={.items[*].status.phase}'] }}
+      register: loadgen_pods
+      until: loadgen_pods.stdout.split() | intersect(['Running', 'Succeeded', 'Failed']) | length > 0
       retries: 60
       delay: 2
       changed_when: false
 
     - name: Fail fast when k6 failed
-      when: loadgen_job_prior.stdout | trim == ''
       ansible.builtin.assert:
-        that: loadgen_job.stdout.split('/')[2] == ''
+        that: "'Failed' not in loadgen_pods.stdout.split()"
         fail_msg: "instance {{ instance.name }}: the k6 Job failed; see generator.stderr in output_dir"
         quiet: true
 

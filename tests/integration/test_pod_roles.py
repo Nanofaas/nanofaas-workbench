@@ -40,7 +40,18 @@ esac
     script.chmod(0o755)
     # kubectl get job: active/succeeded/failed from job.state; nothing = no Job.
     kubectl = bindir / "kubectl"
-    kubectl.write_text(f"#!/bin/sh\ncat {tmp_path}/job.state 2>/dev/null\nexit 0\n")
+    kubectl.write_text(f"""#!/bin/sh
+case "$*" in
+  *"get pods"*)
+    if [ -f {tmp_path}/pending_once ]; then
+      rm {tmp_path}/pending_once; echo Pending
+    else
+      cat {tmp_path}/pod.state 2>/dev/null || echo Running
+    fi;;
+  *) cat {tmp_path}/job.state 2>/dev/null;;
+esac
+exit 0
+""")
     kubectl.chmod(0o755)
     return {"PATH": f"{bindir}{os.pathsep}{os.environ['PATH']}"}, tmp_path
 
@@ -136,7 +147,8 @@ def lg_vars(name: str, out: Path) -> dict:
     return {
         "instances": [
             {"name": name, "component": "loadgen", "form": "pod",
-             "config": {"script": "one-shot.js", "output_dir": str(out)}}
+             "config": {"script": "one-shot.js", "output_dir": str(out),
+                        "node_name": "worker"}}
         ]
     }  # fmt: skip
 
@@ -228,3 +240,33 @@ def test_pod_service_listener(run_playbook, stub_helm, component, bind):
             assert "--web.enable-admin-api" not in vals["args"]
     finally:
         run_playbook("undeploy", vs, **env)
+
+
+def test_loadgen_pod_requires_node_name(run_playbook, tmp_path):
+    vs = lg_vars("missing-node", tmp_path / "out")
+    del vs["instances"][0]["config"]["node_name"]
+    done = run_playbook("deploy", vs)
+    assert done.returncode != 0
+    assert "needs config.node_name" in done.stdout
+    assert not (tmp_path / "out").exists()
+
+
+def test_active_loadgen_waits_for_running_pod(run_playbook, stub_helm):
+    env, tmp = stub_helm
+    (tmp / "job.state").write_text("1//")
+    (tmp / "pending_once").touch()
+    vs = lg_vars("pending", tmp / "node-only-output")
+    done = run_playbook("deploy", vs, **env)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert not (tmp / "pending_once").exists()
+    assert not (tmp / "node-only-output").exists()
+    assert not (tmp / "values.yaml").exists()
+
+
+def test_active_loadgen_with_failed_pod_is_rejected(run_playbook, stub_helm):
+    env, tmp = stub_helm
+    (tmp / "job.state").write_text("1//")
+    (tmp / "pod.state").write_text("Failed")
+    done = run_playbook("deploy", lg_vars("failed", tmp / "out"), **env)
+    assert done.returncode != 0
+    assert "k6 Job failed" in done.stdout
