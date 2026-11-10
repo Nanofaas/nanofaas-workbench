@@ -45,3 +45,11 @@
   loop: "{{ instances }}"
   loop_control:
     label: "{{ item.name | default('<no name>') }}"
+
+- name: Validate the collection host path segment
+  ansible.builtin.assert:
+    that:
+      - inventory_hostname is match('^[A-Za-z0-9_][A-Za-z0-9_.-]*\Z')
+    fail_msg: "inventory_hostname must be a safe path segment for collect"
+    quiet: true
+  when: wb_action == 'collect'

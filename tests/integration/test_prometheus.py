@@ -107,7 +107,7 @@ def test_scrape_and_snapshot(run_playbook, free_port, tmp_path, host_get):
             )
         done = run_playbook("collect", vs)
         assert done.returncode == 0, done.stdout + done.stderr
-        tarball = tmp_path / "out" / "pr" / "prometheus-snapshot.tar.gz"
+        tarball = tmp_path / "out" / "localhost" / "pr" / "prometheus-snapshot.tar.gz"
         with tarfile.open(tarball) as t:
             names = t.getnames()
         assert any("meta.json" in n or "chunks_head" in n for n in names), names

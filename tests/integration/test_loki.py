@@ -171,7 +171,7 @@ def test_collect_fetches_tarball_from_a_remote_host(run_playbook, free_port, tmp
     vs["collect_dir"] = str(tmp_path / "out")
     done = run_playbook("collect", vs, inventory=str(inv))
     assert done.returncode == 0, done.stdout + done.stderr
-    tarball = tmp_path / "out" / "lk" / "data.tar.gz"
+    tarball = tmp_path / "out" / "box" / "lk" / "data.tar.gz"
     with tarfile.open(tarball) as t:
         assert "./chunk" in t.getnames()
     assert not Path("/tmp/wb-lk-data.tar.gz").exists()  # remote copy removed

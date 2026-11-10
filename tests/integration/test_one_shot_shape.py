@@ -168,7 +168,7 @@ def test_one_shot_shape(run_playbook, host_get, echo, generator_rows, tmp_path):
         else:
             done = run_playbook("collect", vs)
             assert done.returncode == 0, done.stdout + done.stderr
-            got = tmp_path / "collected"
+            got = tmp_path / "collected" / "localhost"
             assert (
                 "fluentbit_input_records_total"
                 in (got / n["lc"] / "metrics.txt").read_text()

@@ -44,3 +44,9 @@ Install: `ansible-galaxy collection install git+https://github.com/Nanofaas/nano
 
 Run: `ansible-playbook -i <inventory> -e workbench_vars=<file> nanofaas.workbench.deploy`
 (also `.collect`, `.undeploy`).
+
+Collected artifacts always include the inventory alias in their path, including
+single-host runs: `<collect_dir>/<inventory_hostname>/<instance>/...`. Migrate
+readers from the previous flat layout. Use stable inventory aliases containing
+letters, digits, underscores, dots or dashes, beginning with a letter, digit or
+underscore; path separators are rejected. Historical archives are not moved.

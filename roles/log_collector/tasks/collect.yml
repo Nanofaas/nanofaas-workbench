@@ -20,7 +20,7 @@
 
 - name: Create the collect dir
   ansible.builtin.file:
-    path: "{{ collect_dir }}/{{ instance.name }}"
+    path: "{{ wb_collect_host_dir }}/{{ instance.name }}"
     state: directory
     mode: "0755"
   delegate_to: localhost
@@ -29,7 +29,7 @@
 - name: Store the metrics
   ansible.builtin.copy:
     content: "{{ log_collector_metrics.content }}"
-    dest: "{{ collect_dir }}/{{ instance.name }}/metrics.txt"
+    dest: "{{ wb_collect_host_dir }}/{{ instance.name }}/metrics.txt"
     mode: "0644"
   delegate_to: localhost
   become: false

@@ -15,5 +15,5 @@ tunnels), listening on `<bind>:<port>` via `--web.listen-address`; admin API ena
 The rendered config is `/tmp/wb-<instance>/prometheus.yml`; a changed file restarts the container.
 
 `collect`: POST `/api/v1/admin/tsdb/snapshot`, archive the snapshot (under `data_dir/snapshots`) to
-`<collect_dir>/<instance>/prometheus-snapshot.tar.gz`. Image pinned by digest (`prometheus_image`,
+`<collect_dir>/<inventory_hostname>/<instance>/prometheus-snapshot.tar.gz`. Image pinned by digest (`prometheus_image`,
 3.16.0). Snapshots accumulate under `data_dir/snapshots` (nothing prunes them). Pod form (`collect` is not implemented and fails clearly): a Deployment on the host network (as the container form), the data dir is an `emptyDir`.

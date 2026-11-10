@@ -15,6 +15,6 @@ fluent-bit shipping container logs to Loki. Container form: **host network**; re
 
 A changed config file restarts the container.
 
-`collect`: GET `/api/v2/metrics/prometheus` to `<collect_dir>/<instance>/metrics.txt`; on a
+`collect`: GET `/api/v2/metrics/prometheus` to `<collect_dir>/<inventory_hostname>/<instance>/metrics.txt`; on a
 non-local host also the storage dir as `storage.tar.gz` (locally it is the caller's already).
 Image pinned by digest (`log_collector_image`, 5.1.3). Pod form: a Deployment on the host network; `storage_dir` is a `hostPath` and `docker_root/containers` is mounted read-only at `/var/log/containers`, as in the container form, plus `/var/log/pods` read-only so containerd's symlinks in `/var/log/containers` resolve. `collect` is not implemented for the pod form and fails clearly.

@@ -65,7 +65,7 @@ def test_prometheus_collect_archives_the_snapshot(run_playbook, stub_api, tmp_pa
     }  # fmt: skip
     done = run_playbook("collect", vs)
     assert done.returncode == 0, done.stdout + done.stderr
-    with tarfile.open(tmp_path / "out" / "pr" / "prometheus-snapshot.tar.gz") as t:
+    with tarfile.open(tmp_path / "out" / "localhost" / "pr" / "prometheus-snapshot.tar.gz") as t:
         assert "./meta.json" in t.getnames()
 
 
@@ -87,7 +87,7 @@ def test_log_collector_collect_stores_metrics_and_storage(
     ):
         done = run_playbook("collect", vs, inventory=inventory)
         assert done.returncode == 0, done.stdout + done.stderr
-        out = tmp_path / "out" / "lc"
+        out = tmp_path / "out" / ("box" if has_tar else "localhost") / "lc"
         assert "fluentbit_input_records_total" in (out / "metrics.txt").read_text()
         assert (out / "storage.tar.gz").exists() == has_tar
 
@@ -126,7 +126,7 @@ def test_remote_collect_reads_files_a_container_wrote_as_another_uid(
         }  # fmt: skip
         done = run_playbook("collect", vs, inventory=remote_inventory(tmp_path))
         assert done.returncode == 0, done.stdout + done.stderr
-        archive = tmp_path / "out" / "lk" / "data.tar.gz"
+        archive = tmp_path / "out" / "box" / "lk" / "data.tar.gz"
         assert archive.stat().st_uid == os.getuid()
         with tarfile.open(archive) as t:
             member = t.extractfile("./chunks/c")
@@ -151,7 +151,7 @@ def test_collect_fails_when_the_archive_cannot_be_completed(run_playbook, tmp_pa
     not_a_dir.write_text("x")
     done = loki_collect(run_playbook, tmp_path, not_a_dir)
     assert done.returncode != 0, done.stdout
-    assert not (tmp_path / "out" / "lk" / "data.tar.gz").exists()
+    assert not (tmp_path / "out" / "box" / "lk" / "data.tar.gz").exists()
 
 
 def test_collect_fails_clearly_for_a_missing_source_dir(run_playbook, tmp_path):
