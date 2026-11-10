@@ -240,3 +240,9 @@ def test_validate_fills_defaults():
 def test_validate_rejects(spec):
     with pytest.raises(ValueError):  # noqa: PT011
         validate(spec)
+
+
+@pytest.mark.parametrize("kind", [[], {}, None, False, 1])
+def test_kind_must_be_a_string(kind):
+    with pytest.raises(ValueError, match="kind"):
+        validate({"kind": kind, "params": {}})

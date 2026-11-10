@@ -17,7 +17,7 @@ Not a component: shared task files the component roles include.
 - `fetch_dir_tarball.yml` archives `wb_src_dir` on the target in a throwaway container
   (`common_probe_image`, root inside, no network), so files a component wrote as another uid or
   with mode 0600 are read without `become`; the tarball is chowned to the connection user, fetched
-  to `<collect_dir>/<instance>/<wb_archive>` and the scratch dir removed.
+  to `<collect_dir>/<inventory_hostname>/<instance>/<wb_archive>` and the scratch dir removed.
 - `pod_deploy.yml` installs the chart for one instance (inputs `wb_key`, `wb_values`, optional `wb_files`,
   `wb_files_dir`, `wb_cpu`, `wb_memory`, `wb_wait`); `pod_undeploy.yml` runs `helm uninstall`
   (a missing release is success). The chart is copied to `/tmp/wb-<instance>/chart` on the target first (helm runs there); undeploy removes `/tmp/wb-<instance>`. `pod_collect_unsupported.yml` fails `collect` for pod-form instances of components that collect something.

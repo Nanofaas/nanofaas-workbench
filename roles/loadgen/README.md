@@ -35,3 +35,11 @@ One k6 JSON log object per line; the script's `console.log(JSON.stringify(row))`
 string in `msg`. A reader does `row = json.loads(json.loads(line)["msg"])` and keeps rows whose
 `event` is `emitted` or `result` (what nanolab's `generator_rows` does). Other lines (k6 errors,
 no `event`) are skipped.
+
+For pod form, `config.node_name` is required: this is the node that owns the
+schedule mounts, output directory and any loopback endpoints. Provision these
+directories on that node before deploy; the Ansible controller does not create
+them. All hostPath mounts require existing directories. Deploy waits up to two
+minutes for a Running or successfully completed pod; Pending is not started.
+An existing running job is reused, and a completed job must be undeployed before
+another run, to avoid duplicating load.

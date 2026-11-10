@@ -1,4 +1,7 @@
 {{- with .Values.prometheus }}{{ if .enabled }}
+{{- if regexMatch "^(127[.]|localhost$|::1$)" .bind }}
+{{- fail "pod Service bind cannot be loopback" }}
+{{- end }}
 {{- $ctx := dict "root" $ "component" "prometheus" }}
 {{ include "wb.configmap" (merge (dict "files" .files) $ctx) }}
 ---
@@ -21,9 +24,6 @@ spec:
       annotations:
         checksum/config: {{ toYaml .files | sha256sum }}
     spec:
-      # Host network: the scrape targets include the node's loopback, as in the container form.
-      hostNetwork: true
-      dnsPolicy: ClusterFirstWithHostNet
       containers:
         - name: prometheus
           image: {{ required "prometheus.image is required" .image | quote }}
@@ -31,7 +31,7 @@ spec:
           ports:
             - containerPort: {{ .port }}
           readinessProbe:
-            tcpSocket: {host: {{ .bind | quote }}, port: {{ .port }}}
+            tcpSocket: {port: {{ .port }}}
           volumeMounts:
             {{- include "wb.filemounts" (dict "files" .files "dir" "/etc/prometheus") | nindent 12 }}
             - {name: data, mountPath: /prometheus}

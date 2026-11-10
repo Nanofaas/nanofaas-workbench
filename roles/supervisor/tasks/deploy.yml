@@ -7,11 +7,19 @@
     fail_msg: "instance {{ instance.name }}: supervisor needs config.port and config.prometheus_url"
     quiet: true
 
+- name: Reject a loopback listener for the pod Service
+  ansible.builtin.assert:
+    that:
+      - instance.config.bind | default('0.0.0.0') is not match('^(127[.]|localhost$|::1$)')
+    fail_msg: "pod Service bind cannot be loopback"
+    quiet: true
+  when: (instance.form | default('container')) == 'pod'
+
 - name: Work out the command line
   ansible.builtin.set_fact:
     supervisor_command:
       - "--port={{ instance.config.port }}"
-      - "--bind={{ instance.config.bind | default('127.0.0.1') }}"
+      - "--bind={{ instance.config.bind | default('0.0.0.0' if (instance.form | default('container')) == 'pod' else '127.0.0.1') }}"
       - "--prometheus={{ instance.config.prometheus_url }}"
       - "--interval={{ instance.config.interval | default(5) }}"
       - "--targets={{ instance.config.targets | default({}) | to_json }}"
@@ -27,7 +35,7 @@
       image: "{{ instance.config.image | default(supervisor_image) }}"
       args: "{{ supervisor_command }}"
       port: "{{ instance.config.port }}"
-      bind: "{{ instance.config.bind | default('127.0.0.1') }}"
+      bind: "{{ instance.config.bind | default('0.0.0.0' if (instance.form | default('container')) == 'pod' else '127.0.0.1') }}"
 
 - name: Run the supervisor (container form)
   ansible.builtin.include_role:

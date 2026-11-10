@@ -78,4 +78,5 @@ jobs:
           print(yaml.safe_dump({"collections": [{"name": n, "version": v} for n, v in deps.items()]}))
           PY
           uv run --locked ansible-galaxy collection install -r /tmp/requirements.yml
-      - run: uv run --locked pytest -q -m kind tests/integration/test_pod_form.py
+      - name: Verify pod Services and loadgen on two kind nodes
+        run: uv run --locked pytest -q -m kind tests/integration/test_pod_form.py

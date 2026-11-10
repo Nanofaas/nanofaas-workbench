@@ -25,6 +25,7 @@ COMPONENTS = {
             "args": ["exec k6"],
             "files": {"one-shot.js": "a"},
             "output_dir": "/tmp/out",
+            "node_name": "worker",
             "mounts": {"/b": "/y", "/a": "/x"},
             "user": "1000:1001",
         },
@@ -108,6 +109,7 @@ def test_loadgen_is_a_run_once_job(tmp_path):
     done = helm(tmp_path, "template", values("loadgen"))
     (job,) = [o for o in objects(done.stdout) if o["kind"] == "Job"]
     spec = job["spec"]["template"]["spec"]
+    assert spec["nodeName"] == "worker"
     assert spec["restartPolicy"] == "Never"
     assert job["spec"]["backoffLimit"] == 0
     mounts = {
@@ -155,3 +157,35 @@ def test_host_paths_are_typed_so_nothing_is_created_on_the_node(tmp_path):
                 assert path["type"] == "Socket"
             if path.get("path") in ("/var/log/pods", "/tmp/out"):
                 assert path["type"] == "Directory"
+
+
+@pytest.mark.parametrize("component", ["prometheus", "supervisor"])
+def test_service_targets_pod_network_and_readiness(tmp_path, component):
+    done = helm(tmp_path, "template", values(component))
+    assert done.returncode == 0, done.stderr
+    objs = objects(done.stdout)
+    deployment = next(o for o in objs if o["kind"] == "Deployment")
+    spec = deployment["spec"]["template"]["spec"]
+    assert not spec.get("hostNetwork", False)
+    container = spec["containers"][0]
+    assert "host" not in container["readinessProbe"]["tcpSocket"]
+    assert all("hostPort" not in p for p in container["ports"])
+    service = next(o for o in objs if o["kind"] == "Service")
+    assert service["spec"].get("type", "ClusterIP") == "ClusterIP"
+
+
+@pytest.mark.parametrize("component", ["prometheus", "supervisor"])
+def test_chart_rejects_loopback_service_bind(tmp_path, component):
+    vals = values(component)
+    vals[component]["bind"] = "127.0.0.1"
+    done = helm(tmp_path, "template", vals)
+    assert done.returncode != 0
+    assert "loopback" in done.stderr
+
+
+def test_loadgen_chart_requires_node_name(tmp_path):
+    vals = values("loadgen")
+    vals["loadgen"]["node_name"] = ""
+    done = helm(tmp_path, "template", vals)
+    assert done.returncode != 0
+    assert "loadgen.node_name is required" in done.stderr

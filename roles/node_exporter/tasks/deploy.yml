@@ -5,6 +5,11 @@
       - --path.procfs=/host/proc
       - --path.sysfs=/host/sys
 
+- name: Disable CPU frequency collection when requested
+  ansible.builtin.set_fact:
+    node_exporter_command: "{{ node_exporter_command + ['--no-collector.cpufreq'] }}"
+  when: not (instance.config.cpufreq | default(true) | bool)
+
 - name: Check the pod form's config
   when: (instance.form | default('container')) == 'pod'
   ansible.builtin.assert:

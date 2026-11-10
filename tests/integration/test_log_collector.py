@@ -120,5 +120,5 @@ def test_collect_stores_metrics(deployed, run_playbook, tmp_path):
         pytest.skip("Docker Desktop: host network not reachable, collect needs Linux")
     done = run_playbook("collect", vs)
     assert done.returncode == 0, done.stdout + done.stderr
-    metrics = (tmp_path / "out" / "lc" / "metrics.txt").read_text()
+    metrics = (tmp_path / "out" / "localhost" / "lc" / "metrics.txt").read_text()
     assert "fluentbit_input_records_total" in metrics

@@ -9,6 +9,7 @@
     tasks_from: "{{ wb_action }}"
   vars:
     instance: "{{ item }}"
+    wb_collect_host_dir: "{{ collect_dir }}/{{ inventory_hostname }}"
   loop: "{{ (instances | reverse | list) if wb_action == 'undeploy' else instances }}"
   loop_control:
     label: "{{ item.name }}"

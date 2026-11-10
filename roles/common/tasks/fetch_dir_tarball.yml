@@ -1,6 +1,6 @@
 ---
 # Inputs: instance, collect_dir, wb_src_dir (on the target host), wb_archive (file name in
-# <collect_dir>/<instance>/). A throwaway container (root inside, no network) archives the
+# <collect_dir>/<inventory_hostname>/<instance>/). A throwaway container (root inside, no network) archives the
 # directory, so files a component wrote as another uid or with mode 0600 are read without
 # become; the tarball is handed to the connection user, fetched, and the scratch dir removed.
 - name: Look up the connection user
@@ -56,7 +56,7 @@
     - name: Fetch the tarball
       ansible.builtin.fetch:
         src: "{{ common_scratch.path }}/{{ wb_archive }}"
-        dest: "{{ collect_dir }}/{{ instance.name }}/{{ wb_archive }}"
+        dest: "{{ wb_collect_host_dir }}/{{ instance.name }}/{{ wb_archive }}"
         flat: true
 
   always:

@@ -8,7 +8,7 @@ instance: ""
 prometheus:
   enabled: false
   port: 9090
-  bind: 127.0.0.1
+  bind: 0.0.0.0
   files: {}   # {prometheus.yml: <content>}
 loki:
   enabled: false
@@ -26,12 +26,13 @@ loadgen:
   files: {}   # {<script>: <content>}
   env: {}
   output_dir: ""
+  node_name: ""
   mounts: {}  # {host_path: container_path}, read-only
   user: ""    # "uid:gid"
 supervisor:
   enabled: false
   port: 8099  # the supervisor CLI's default
-  bind: 127.0.0.1
+  bind: 0.0.0.0
 node_exporter:
   enabled: false
   port: 9100

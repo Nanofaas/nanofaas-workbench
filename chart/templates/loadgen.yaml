@@ -14,6 +14,7 @@ spec:
     metadata:
       labels: {{- include "wb.labels" $ctx | nindent 8 }}
     spec:
+      nodeName: {{ required "loadgen.node_name is required" .node_name | quote }}
       restartPolicy: Never
       # Host network: schedules use loopback URLs.
       hostNetwork: true
@@ -46,6 +47,6 @@ spec:
           hostPath: {path: {{ required "loadgen.output_dir is required" .output_dir | quote }}, type: Directory}
         {{- range $i, $h := (keys .mounts | sortAlpha) }}
         - name: mount-{{ $i }}
-          hostPath: {path: {{ $h | quote }}}
+          hostPath: {path: {{ $h | quote }}, type: Directory}
         {{- end }}
 {{- end }}{{ end }}
