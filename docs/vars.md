@@ -50,3 +50,9 @@ single-host runs: `<collect_dir>/<inventory_hostname>/<instance>/...`. Migrate
 readers from the previous flat layout. Use stable inventory aliases containing
 letters, digits, underscores, dots or dashes, beginning with a letter, digit or
 underscore; path separators are rejected. Historical archives are not moved.
+
+For a container `log-collector`, `config.journal: true` mounts the host's
+`/var/log/journal` and `/etc/machine-id` read-only. Supply a Fluent Bit systemd
+input in `config.config_files`; the role does not change host Docker or journald
+configuration. Provision persistent journal storage and its retention budget on
+the host before starting producers. The default remains the existing log mounts.

@@ -37,3 +37,5 @@ metrics invalidate an experiment or require retaining its VM is the caller's
 policy; this collection never deletes VMs or source buffers.
 
 Image pinned by digest (`log_collector_image`, 5.1.3). Pod form: a Deployment on the host network; `storage_dir` is a `hostPath` and `docker_root/containers` is mounted read-only at `/var/log/containers`, as in the container form, plus `/var/log/pods` read-only so containerd's symlinks in `/var/log/containers` resolve. `collect` is not implemented for the pod form and fails clearly.
+
+`config.journal: true` (container form only) mounts the persistent host journal and machine ID read-only. The supplied Fluent Bit config must select the systemd input. The caller provisions persistent journald storage and its disk/rate limits before starting producers. Journal records survive producer removal; delivery remains bounded by journal and collector retention. The collector never changes Docker or host logging settings.

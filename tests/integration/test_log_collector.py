@@ -122,3 +122,98 @@ def test_collect_stores_metrics(deployed, run_playbook, tmp_path):
     assert done.returncode == 0, done.stdout + done.stderr
     metrics = (tmp_path / "out" / "localhost" / "lc" / "metrics.txt").read_text()
     assert "fluentbit_input_records_total" in metrics
+
+
+def test_journal_replays_receipts_after_producer_removal(
+    deployed, run_playbook, tmp_path
+):
+    """A collector outage and container deletion must not erase unread receipts."""
+    import uuid
+    from urllib.parse import urlencode
+
+    if not Path("/var/log/journal").is_dir() or not Path("/etc/machine-id").is_file():
+        pytest.skip("persistent systemd journal required")
+    vs, _, loki_port, _ = deployed
+    collector = vs["instances"][1]
+    assert docker("stop", "wb-lc").returncode == 0
+    token = "wb-receipt-" + uuid.uuid4().hex
+    receipts = "\n".join(
+        json.dumps(
+            {"event": "runtime.execution.released", "executionId": f"{token}-{i}"}
+        )
+        for i in range(50)
+    )
+    produced = subprocess.run(
+        [
+            "docker",
+            "run",
+            "--rm",
+            "--log-driver=journald",
+            "--name",
+            token,
+            "-i",
+            "busybox:1.36",
+            "cat",
+        ],
+        input=receipts + "\n",
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert produced.returncode == 0, produced.stderr
+    assert docker("inspect", token).returncode != 0
+    config = (FIXTURES / "fluent-bit.conf").read_text()
+    start, end = config.index("[INPUT]"), config.index("[OUTPUT]")
+    config = (
+        config[:start]
+        + """[INPUT]
+    Name              systemd
+    Tag               test.journal
+    Path              /var/log/journal
+    DB                /var/lib/fluent-bit/journal.db
+    Read_From_Tail    Off
+    Systemd_Filter    CONTAINER_NAME="""
+        + token
+        + "\n\n"
+        + config[end:]
+    )
+    path = tmp_path / "journal.conf"
+    path.write_text(config)
+    collector["config"]["journal"] = True
+    collector["config"]["config_files"]["fluent-bit.conf"] = str(path)
+    done = run_playbook("deploy", vs)
+    assert done.returncode == 0, done.stdout + done.stderr
+    params = urlencode(
+        {
+            "query": '{job="wbtest"} |= "' + token + '"',
+            "start": time.time_ns() - 300 * 10**9,
+            "limit": 1000,
+        }
+    )
+    url = f"http://127.0.0.1:{loki_port}/loki/api/v1/query_range?{params}"
+    for _ in range(30):
+        try:
+            body = json.loads(urllib.request.urlopen(url, timeout=5).read())
+            values = [
+                json.loads(line)
+                for stream in body["data"]["result"]
+                for _, line in stream["values"]
+            ]
+            identities = {
+                json.loads(value["MESSAGE"])["executionId"] for value in values
+            }
+            if len(identities) == 50:
+                assert identities == {f"{token}-{i}" for i in range(50)}
+                break
+        except OSError:
+            pass
+        time.sleep(1)
+    else:
+        pytest.fail("journal receipts were lost after producer removal")
+    # The stored journal cursor also survives a collector restart.
+    assert docker("restart", "wb-lc").returncode == 0
+    info = json.loads(docker("inspect", "wb-lc").stdout)[0]
+    assert any(
+        mount["Destination"] == "/var/log/journal" and not mount["RW"]
+        for mount in info["Mounts"]
+    )
