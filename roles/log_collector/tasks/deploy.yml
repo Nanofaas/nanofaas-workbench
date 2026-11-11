@@ -6,6 +6,7 @@
       - instance.config.storage_dir is defined
       - instance.config.config_files is defined
       - instance.config.loki is defined
+      - not (instance.config.journal | default(false) | bool) or (instance.form | default('container')) == 'container'
     fail_msg: "instance {{ instance.name }}: log-collector needs config.port, storage_dir, config_files and loki"
     quiet: true
 
@@ -86,8 +87,11 @@
           max-size: 10m
           max-file: "2"
         wb_env: "{{ log_collector_env }}"
-        wb_volumes:
-          - "{{ instance.config.docker_root | default('/var/lib/docker') }}/containers:/var/log/containers:ro"
-          - "{{ instance.config.storage_dir }}:/var/lib/fluent-bit"
-          - "/tmp/wb-{{ instance.name }}/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro"
-          - "/tmp/wb-{{ instance.name }}/parsers.conf:/fluent-bit/etc/parsers.conf:ro"
+        wb_volumes: >-
+          {{ [
+            (instance.config.docker_root | default('/var/lib/docker')) ~ '/containers:/var/log/containers:ro',
+            instance.config.storage_dir ~ ':/var/lib/fluent-bit',
+            '/tmp/wb-' ~ instance.name ~ '/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro',
+            '/tmp/wb-' ~ instance.name ~ '/parsers.conf:/fluent-bit/etc/parsers.conf:ro'
+          ] + (['/var/log/journal:/var/log/journal:ro', '/etc/machine-id:/etc/machine-id:ro']
+               if instance.config.journal | default(false) | bool else []) }}
